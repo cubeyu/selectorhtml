@@ -66,19 +66,20 @@ Query: date_from=2026-05-23, date_to=2026-06-22, creator_ids ×2
 
 ## How it works
 
-The bookmarklet injects `editor.css` + `editor.js` into the current page. Everything runs client-side — no data is sent anywhere. The install page concatenates `assets/editor.js` with `assets/sharingan.js` (spliced into a marker comment inside the editor IIFE) and bundles the result into the bookmark, so it works offline after that.
+The bookmarklet injects `editor.css` + the built `editor.js` into the current page. Everything runs client-side — no data is sent anywhere. The build step combines the `src/` editor fragments with `src/sharingan.js`, and the install page bundles that result into the bookmark, so it works offline after that.
 
 ## Development
 
 ```bash
 git clone https://github.com/oil-oil/selector.git
 cd selector
+npm ci
+npm run build
 # Source files:
 #   assets/editor.css     — styles for the in-page editor UI
-#   assets/editor.js      — core editor: selection, UI, copy/screenshot, prompt builder
-#   assets/sharingan.js   — Sharingan-mode replication report (inlined into editor.js
-#                           at the /*__SHARINGAN_MODULE__*/ marker by index.html)
-# Push to main — GitHub Pages auto-deploys
+#   src/*.js              — editor source fragments assembled by scripts/build.js
+#   src/sharingan.js      — Sharingan-mode replication report, inlined at build time
+# Push to main — GitHub Actions builds dist/ and deploys GitHub Pages
 ```
 
 ## License
