@@ -144,9 +144,10 @@
     ov.box.style.top=(r.top-pad)+"px"; ov.box.style.left=(r.left-pad)+"px"; ov.box.style.width=(r.width+pad*2)+"px"; ov.box.style.height=(r.height+pad*2)+"px";
     const cs=6, pos=[{top:r.top-pad-cs/2,left:r.left-pad-cs/2},{top:r.top-pad-cs/2,left:r.right+pad-cs/2},{top:r.bottom+pad-cs/2,left:r.left-pad-cs/2},{top:r.bottom+pad-cs/2,left:r.right+pad-cs/2}];
     for (let i=0;i<4;i++) { ov.corners[i].style.top=pos[i].top+"px"; ov.corners[i].style.left=pos[i].left+"px"; }
-    ov.label.style.top=(r.top-pad-20)+"px"; ov.label.style.left=(r.left-pad)+"px";
-    ov.markdownBtn.style.top=(r.top+4)+"px"; ov.markdownBtn.style.left=(r.right-24)+"px";
-    ov.annotateBtn.style.top=(r.top+4)+"px"; ov.annotateBtn.style.left=(r.right-48)+"px";
+    const toolbarTop = r.top-pad-20;
+    ov.label.style.top=toolbarTop+"px"; ov.label.style.left=(r.left-pad)+"px";
+    ov.markdownBtn.style.top=toolbarTop+"px"; ov.markdownBtn.style.left=(r.right+pad-20)+"px";
+    ov.annotateBtn.style.top=toolbarTop+"px"; ov.annotateBtn.style.left=(r.right+pad-44)+"px";
     ov.annotateBtn.classList.toggle(`${NS}-has-note`, annotations.has(aiId));
   }
   function positionAllOverlays() { for (const el of selectedElements) positionSelOverlay(el); }
