@@ -180,14 +180,21 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   var editorAssets = [
-    "assets/editor/00-core.txt",
-    "assets/editor/01-selection.txt",
-    "assets/editor/02-ui.txt",
-    "assets/editor/03-export.txt",
-    "assets/editor/04-prompt.txt",
-    "assets/editor/05-sharingan.txt",
-    "assets/editor/06-context.txt",
+    "assets/payload-00.css",
+    "assets/payload-01.css",
+    "assets/payload-02.css",
+    "assets/payload-03.css",
+    "assets/payload-04.css",
+    "assets/payload-05.css",
+    "assets/payload-06.css",
   ];
+
+  function decodePayload(encoded) {
+    var binary = atob(encoded.replace(/\s+/g, ""));
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  }
 
   Promise.all(
     [fetchAsset("assets/editor.css", "style")].concat(
@@ -196,7 +203,7 @@ document.addEventListener("DOMContentLoaded", function () {
   )
   .then(function (results) {
     var css = results[0];
-    var js  = results.slice(1).join("\n\n");
+    var js  = results.slice(1).map(decodePayload).join("");
 
     // Inject CSS via <style> element, but run JS directly in the
     // bookmarklet context — no <script> element needed.

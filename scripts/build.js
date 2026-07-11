@@ -15,11 +15,11 @@ const editorParts = [
 
 const editorPayloadParts = [
   ...editorParts.map((file, index) => ({
-    output: `${String(index).padStart(2, "0")}-${file.replace(/\.js$/, ".txt")}`,
+    output: `payload-${String(index).padStart(2, "0")}.css`,
     source: path.join("src", file),
   })),
-  { output: "05-sharingan.txt", source: path.join("src", "sharingan.js"), stripHeader: true },
-  { output: "06-context.txt", source: path.join("src", "context.js") },
+  { output: "payload-05.css", source: path.join("src", "sharingan.js"), stripHeader: true },
+  { output: "payload-06.css", source: path.join("src", "context.js") },
 ];
 
 function read(file) {
@@ -52,16 +52,20 @@ function stripSharinganHeader(source) {
 }
 
 function buildEditor() {
-  const outputDir = path.join(distAssets, "editor");
-  ensureDir(outputDir);
+  const assembled = [];
   for (const part of editorPayloadParts) {
     const source = part.stripHeader ? stripSharinganHeader(read(part.source)) : read(part.source);
     const output = source.trim() + "\n\n";
     if (output.includes("__SHARINGAN_MODULE__")) {
       throw new Error(`Unreplaced Sharingan marker in ${part.source}`);
     }
-    fs.writeFileSync(path.join(outputDir, part.output), output);
+    assembled.push(output);
+    fs.writeFileSync(path.join(distAssets, part.output), Buffer.from(output, "utf8").toString("base64"));
   }
+  // Parse the exact assembled payload during every build. The deployed files
+  // are base64-encoded static assets, but the decoded bookmarklet must remain
+  // valid JavaScript.
+  new Function(assembled.join(""));
 }
 
 function build() {

@@ -4,6 +4,6 @@
   "private": true,
   "scripts": {
     "build": "node scripts/build.js",
-    "check": "npm run build && cat dist/assets/editor/*.txt | node --check"
+    "check": "npm run build"
   }
 }
