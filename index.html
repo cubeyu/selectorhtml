@@ -179,13 +179,24 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  Promise.all([
-    fetchAsset("assets/editor.css", "style"),
-    fetchAsset("assets/editor.txt", "script"),
-  ])
+  var editorAssets = [
+    "assets/editor/00-core.txt",
+    "assets/editor/01-selection.txt",
+    "assets/editor/02-ui.txt",
+    "assets/editor/03-export.txt",
+    "assets/editor/04-prompt.txt",
+    "assets/editor/05-sharingan.txt",
+    "assets/editor/06-context.txt",
+  ];
+
+  Promise.all(
+    [fetchAsset("assets/editor.css", "style")].concat(
+      editorAssets.map(function (path) { return fetchAsset(path, "script"); })
+    )
+  )
   .then(function (results) {
     var css = results[0];
-    var js  = results[1];
+    var js  = results.slice(1).join("\n\n");
 
     // Inject CSS via <style> element, but run JS directly in the
     // bookmarklet context — no <script> element needed.

@@ -13,6 +13,15 @@ const editorParts = [
   "prompt.js",
 ];
 
+const editorPayloadParts = [
+  ...editorParts.map((file, index) => ({
+    output: `${String(index).padStart(2, "0")}-${file.replace(/\.js$/, ".txt")}`,
+    source: path.join("src", file),
+  })),
+  { output: "05-sharingan.txt", source: path.join("src", "sharingan.js"), stripHeader: true },
+  { output: "06-context.txt", source: path.join("src", "context.js") },
+];
+
 function read(file) {
   return fs.readFileSync(path.join(root, file), "utf8");
 }
@@ -43,18 +52,16 @@ function stripSharinganHeader(source) {
 }
 
 function buildEditor() {
-  const beforeSharingan = editorParts.map((file) => read(path.join("src", file)).trimEnd()).join("\n\n");
-  const sharingan = stripSharinganHeader(read(path.join("src", "sharingan.js"))).trimEnd();
-  const afterSharingan = read(path.join("src", "context.js")).trimStart();
-  const output = `${beforeSharingan}\n\n${sharingan}\n\n${afterSharingan}`;
-  if (output.includes("__SHARINGAN_MODULE__")) {
-    throw new Error("Unreplaced Sharingan marker in built editor");
+  const outputDir = path.join(distAssets, "editor");
+  ensureDir(outputDir);
+  for (const part of editorPayloadParts) {
+    const source = part.stripHeader ? stripSharinganHeader(read(part.source)) : read(part.source);
+    const output = source.trim() + "\n\n";
+    if (output.includes("__SHARINGAN_MODULE__")) {
+      throw new Error(`Unreplaced Sharingan marker in ${part.source}`);
+    }
+    fs.writeFileSync(path.join(outputDir, part.output), output);
   }
-  // GitHub Pages can refuse to serve generated JavaScript payloads even when
-  // they are present in the deployment artifact. The installer only needs the
-  // source as text, so publish it with a neutral extension and execute it from
-  // the user-initiated javascript: bookmarklet.
-  fs.writeFileSync(path.join(distAssets, "editor.txt"), output);
 }
 
 function build() {
