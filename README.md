@@ -66,7 +66,7 @@ Query: date_from=2026-05-23, date_to=2026-06-22, creator_ids ×2
 
 ## How it works
 
-The bookmarklet injects `editor.css` + the built `editor.js` into the current page. Everything runs client-side — no data is sent anywhere. The build step combines the `src/` editor fragments with `src/sharingan.js`, and the install page bundles that result into the bookmark, so it works offline after that.
+The bookmarklet injects `editor.css` + the built editor payload into the current page. Everything runs client-side — no data is sent anywhere. The build step combines the `src/` editor fragments with `src/sharingan.js`, and the install page bundles that result into the bookmark, so it works offline after that.
 
 ## Development
 

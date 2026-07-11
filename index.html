@@ -167,9 +167,21 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   applyI18n();
 
+  function fetchAsset(path, kind) {
+    return fetch(base + path).then(function (r) {
+      if (!r.ok) throw new Error(path + " returned HTTP " + r.status);
+      return r.text();
+    }).then(function (text) {
+      if (kind === "script" && /^\s*</.test(text)) {
+        throw new Error(path + " returned HTML instead of JavaScript");
+      }
+      return text;
+    });
+  }
+
   Promise.all([
-    fetch(base + "assets/editor.css").then(function (r) { return r.text(); }),
-    fetch(base + "assets/editor.js").then(function (r) { return r.text(); }),
+    fetchAsset("assets/editor.css", "style"),
+    fetchAsset("assets/editor.txt", "script"),
   ])
   .then(function (results) {
     var css = results[0];

@@ -50,7 +50,11 @@ function buildEditor() {
   if (output.includes("__SHARINGAN_MODULE__")) {
     throw new Error("Unreplaced Sharingan marker in built editor");
   }
-  fs.writeFileSync(path.join(distAssets, "editor.js"), output);
+  // GitHub Pages can refuse to serve generated JavaScript payloads even when
+  // they are present in the deployment artifact. The installer only needs the
+  // source as text, so publish it with a neutral extension and execute it from
+  // the user-initiated javascript: bookmarklet.
+  fs.writeFileSync(path.join(distAssets, "editor.txt"), output);
 }
 
 function build() {
