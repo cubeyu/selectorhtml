@@ -17,7 +17,7 @@
   // logic as the fallback. Never make a path Host-only.
   const HOST = (typeof window !== "undefined" && window.__SELECTOR_HOST__) || {};
   const AI_ID = "data-ai-id";
-  const VERSION = "0.3.8";
+  const VERSION = "0.3.9";
   // Cross-link targets for the settings-panel promo (bookmarklet ⇄ Pro extension).
   const EXT_LANDING_URL = "https://oil-oil.github.io/selector-extension/";
   const BOOKMARKLET_URL = "https://oil-oil.github.io/selector/";
