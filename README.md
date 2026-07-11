@@ -4,6 +4,8 @@ Point at any element. Tell your AI what to change.
 
 A bookmarklet that lets you visually select elements on any web page, add instructions, and copy a structured prompt — paste it into Claude Code, Codex, Cursor, or any AI coding assistant.
 
+https://github.com/user-attachments/assets/fb8e9271-d7e0-487f-b013-106cc4c5a40f
+
 ## Install
 
 1. Visit the **[install page](https://oil-oil.github.io/selector/)**
