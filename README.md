@@ -1,6 +1,6 @@
-# <img src="assets/favicon.svg" width="24" height="24" alt=""> Selector
-
-Point at any element. Tell your AI what to change.
+<p align="center">
+  <img src="assets/readme/hero.svg" width="100%" alt="Selector — point at any web element and copy structured context for your AI coding assistant">
+</p>
 
 A bookmarklet that lets you visually select elements on any web page, add instructions, and copy a structured prompt — paste it into Claude Code, Codex, Cursor, or any AI coding assistant.
 
