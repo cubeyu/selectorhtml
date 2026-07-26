@@ -1,7 +1,9 @@
   // ── Copy feedback ───────────────────────────────────────────
   let copyTimer=null;
+  let copyRequestToken = 0;
   function showCopyFeedback(msg, isError, detail) {
     const btn=chatPanel.querySelector(`.${NS}-copy-btn`);
+    if (!btn) return;
     if (copyTimer) clearTimeout(copyTimer);
     btn.classList.remove(`${NS}-copy-error`);
     btn.classList.add(`${NS}-copy-done`);
@@ -10,12 +12,14 @@
     btn.style.setProperty("-webkit-text-fill-color", "#fff", "important");
     btn.style.setProperty("opacity", "1", "important");
     btn.title = detail || msg;
+    btn.setAttribute("aria-label", detail || msg);
     btn.innerHTML = settings.sharingan
       ? `${SHARINGAN_ICON}<span>${msg}</span>`
       : `${isError ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>' : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>'} <span style="color:#fff!important;-webkit-text-fill-color:#fff!important">${msg}</span>`;
     copyTimer = setTimeout(() => {
       btn.classList.remove(`${NS}-copy-done`, `${NS}-copy-error`);
       btn.title = "";
+      btn.removeAttribute("aria-label");
       btn.style.removeProperty("color");
       btn.style.removeProperty("-webkit-text-fill-color");
       btn.style.removeProperty("opacity");
@@ -29,15 +33,26 @@
     if (err) console.warn(`[Selector] ${t(key)}`, err);
     showCopyFeedback(t(key), true, detail);
   }
+  function showClipboardFeedback(result, token, successKey) {
+    if (token !== copyRequestToken) return;
+    if (result === "clipboard") showCopyFeedback(t(successKey || "copied"));
+    else if (result === "fallback") showCopyFeedback(t("copiedFallback"));
+    else showCopyFeedback(t("copyFailed"), true);
+  }
   async function copyPrompt() {
+    const requestToken = ++copyRequestToken;
     // While a result panel is open, Copy copies that panel's text until closed.
-    if (pendingGenPrompt) { writeToClipboard(pendingGenPrompt); showCopyFeedback(t("copied")); return; }
+    if (pendingGenPrompt) {
+      const result = await writeToClipboard(pendingGenPrompt);
+      showClipboardFeedback(result, requestToken);
+      return;
+    }
     // ── License gate (HOST_CONTRACT.md §1.2) ──────────────────
     // Bookmarklet has no HOST.licensing → skipped entirely. The extension may
     // require an active license before copying; if so, prompt activation.
     if (HOST.licensing && HOST.licensing.required && !HOST.licensing.active) {
       HOST.requestActivation && HOST.requestActivation("copy");
-      showCopyFeedback(t("needLicense"), true);
+      if (requestToken === copyRequestToken) showCopyFeedback(t("needLicense"), true);
       return;
     }
     // ── Alternate copy formats (HOST_CONTRACT.md §1.5) ────────
@@ -53,11 +68,11 @@
           buildSharinganReport,
         });
         if (payload) {
-          writeToClipboard(payload.text);
+          const result = await writeToClipboard(payload.text);
           if (payload.download && payload.download.content) {
             downloadMarkdown(payload.download.content, payload.download.filename);
           }
-          showCopyFeedback(t("copied"));
+          showClipboardFeedback(result, requestToken);
           return;
         }
       } catch (_) { /* fall through to existing logic */ }
@@ -84,21 +99,22 @@
         const filename = sharinganFilename();
         const realPath = await saveMarkdownFile(text, filename);
         const promptText = appendSharinganDownloadReference(buildPromptText(), filename, text.length, realPath);
-        captureScreenshot({ text: promptText, feedbackTarget: "copy", downloadImage: true });
+        if (requestToken === copyRequestToken) await captureScreenshot({ text: promptText, feedbackTarget: "copy", copyRequestToken: requestToken, downloadImage: true });
         return;
       }
-      captureScreenshot({ text, feedbackTarget: "copy", downloadImage: true });
+      if (requestToken === copyRequestToken) await captureScreenshot({ text, feedbackTarget: "copy", copyRequestToken: requestToken, downloadImage: true });
       return;
     }
     if (settings.sharingan && text.length > SHARINGAN_CLIPBOARD_CHAR_LIMIT) {
       const filename = sharinganFilename();
       const realPath = await saveMarkdownFile(text, filename);
       const fallback = appendSharinganDownloadReference(buildPromptText(), filename, text.length, realPath);
-      writeToClipboard(fallback);
-      showCopyFeedback(t("exported"));
+      const result = await writeToClipboard(fallback);
+      showClipboardFeedback(result, requestToken, "exported");
       return;
     }
-    writeToClipboard(text); showCopyFeedback(t("copied"));
+    const result = await writeToClipboard(text);
+    showClipboardFeedback(result, requestToken);
   }
 
   // ── ⌘M — copy as Markdown ──────────────────────────────────
@@ -529,7 +545,8 @@
   // text (guaranteed visible even if the reveal animation is paused — e.g. a
   // backgrounded tab where rAF doesn't fire), then repurpose Copy to the panel
   // text. Some callers still auto-copy; Markdown preview intentionally does not.
-  function finishRevPrompt(fullText, copyLabelKey, shouldCopy) {
+  async function finishRevPrompt(fullText, copyLabelKey, shouldCopy, requestToken) {
+    if (requestToken && requestToken !== copyRequestToken) return;
     if (revStream) {
       if (revStream.timer) { clearTimeout(revStream.timer); revStream.timer = null; }
       revStream.target = fullText;
@@ -543,7 +560,11 @@
     }
     pendingGenPrompt = fullText;
     pendingResultCopyKey = copyLabelKey || "copyGenPrompt";
-    if (shouldCopy !== false) writeToClipboard(fullText);
+    if (shouldCopy !== false) {
+      const token = requestToken || ++copyRequestToken;
+      const result = await writeToClipboard(fullText);
+      showClipboardFeedback(result, token);
+    }
     const btn = copyBtnEl();
     if (btn) {
       btn.disabled = false;
@@ -553,6 +574,7 @@
 
   async function reversePromptForSelection() {
     if (!HOST.reversePrompt && !HOST.reversePromptStream) return;
+    const requestToken = ++copyRequestToken;
     // ── License gate (HOST_CONTRACT.md §1.2) ──────────────────
     // ⌘I always calls the vision model — the most expensive action in the
     // product — so it must honor the same gate as ⌘C / ⌘⇧C.
@@ -596,19 +618,19 @@
           if (!opened) { opened = true; setCopyButtonLoading(false); showRevPromptPanel(); }
           pushRevToken(token);
         });
-        if (opened && acc) finishRevPrompt(acc);
-        else { setCopyButtonLoading(false); showCopyFeedback(t("revFailed"), true); }
+        if (opened && acc) await finishRevPrompt(acc, undefined, undefined, requestToken);
+        else { setCopyButtonLoading(false); if (requestToken === copyRequestToken) showCopyFeedback(t("revFailed"), true); }
       } else {
         const res = await HOST.reversePrompt(payload);
         setCopyButtonLoading(false);
-        if (res && res.prompt) { showRevPromptPanel(); pushRevToken(res.prompt); finishRevPrompt(res.prompt); }
-        else showCopyFeedback(t("revFailed"), true);
+        if (res && res.prompt) { showRevPromptPanel(); pushRevToken(res.prompt); await finishRevPrompt(res.prompt, undefined, undefined, requestToken); }
+        else if (requestToken === copyRequestToken) showCopyFeedback(t("revFailed"), true);
       }
     } catch (err) {
       setCopyButtonLoading(false);
       // Keep a partial stream if we got one; otherwise surface the failure.
-      if (opened && acc) finishRevPrompt(acc);
-      else showCopyFeedback(t("revFailed"), true);
+      if (opened && acc) await finishRevPrompt(acc, undefined, undefined, requestToken);
+      else if (requestToken === copyRequestToken) showCopyFeedback(t("revFailed"), true);
       console.warn("[Selector] reversePrompt", err);
     }
   }
@@ -646,8 +668,19 @@
     }
     const opts = options || {};
     const feedbackTarget = opts.feedbackTarget || "screenshot";
-    const showError = (code, err) => feedbackTarget === "copy" ? showCopyCaptureError(code, err) : showScreenshotError(code, err);
-    const showSuccess = (savedImage) => feedbackTarget === "copy" ? showCopyFeedback(opts.downloadImage && savedImage ? t("copiedSaved") : t("copied")) : showScreenshotFeedback(t("screenshotCopied"));
+    const requestToken = feedbackTarget === "copy" ? (opts.copyRequestToken || ++copyRequestToken) : null;
+    const showError = (code, err) => {
+      if (feedbackTarget === "copy") {
+        if (requestToken !== copyRequestToken) return;
+        showCopyCaptureError(code, err);
+      } else showScreenshotError(code, err);
+    };
+    const showSuccess = (savedImage) => {
+      if (feedbackTarget === "copy") {
+        if (requestToken !== copyRequestToken) return;
+        showCopyFeedback(opts.downloadImage && savedImage ? t("copiedSaved") : t("copied"));
+      } else showScreenshotFeedback(t("screenshotCopied"));
+    };
     // getDisplayMedia is only a requirement on the bookmarklet path; the
     // extension host captures via captureVisibleTab and must not be blocked
     // on pages where mediaDevices is absent (e.g. non-secure contexts).
@@ -1050,15 +1083,24 @@
   }
 
   // ── Clipboard helpers ──────────────────────────────────────
-  function writeToClipboard(text) {
-    if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
-    else fallbackCopy(text);
+  async function writeToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return "clipboard";
+      } catch (_) {
+        // Fall through to the synchronous selection-based path.
+      }
+    }
+    return fallbackCopy(text) ? "fallback" : "failed";
   }
   function fallbackCopy(text) {
     const ta=document.createElement("textarea"); ta.value=text; ta.style.cssText="position:fixed;opacity:0;top:0;left:0";
     document.body.appendChild(ta); ta.focus(); ta.select();
-    try { document.execCommand("copy"); } catch(_) {}
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch(_) {}
     ta.remove();
+    return copied;
   }
 
   function currentPageContext() {

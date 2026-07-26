@@ -307,8 +307,11 @@
   function setCopyButtonIdle(btn) {
     // While a result panel is open, the Copy button copies that panel's text
     // instead of the current element prompt.
-    if (pendingGenPrompt) { btn.textContent = t(pendingResultCopyKey || "copyGenPrompt"); return; }
-    btn.innerHTML = settings.sharingan ? `${SHARINGAN_ICON}<span>${copyButtonLabel()}</span>` : copyButtonLabel();
+    const label = pendingGenPrompt ? t(pendingResultCopyKey || "copyGenPrompt") : copyButtonLabel();
+    if (pendingGenPrompt) btn.textContent = label;
+    else btn.innerHTML = settings.sharingan ? `${SHARINGAN_ICON}<span>${label}</span>` : label;
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
   }
 
   function updateShortcuts() {
