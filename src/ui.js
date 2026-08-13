@@ -25,18 +25,13 @@
   const SHARINGAN_ICON_SRC = "data:image/png;base64,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";
   const SHARINGAN_ICON = `<img class="${NS}-sharingan-icon" src="${SHARINGAN_ICON_SRC}" alt="" aria-hidden="true">`;
   // Small stroke icons for the other rows so each setting reads at a glance.
-  const ICON_COMBINED = `<svg class="${NS}-setting-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>`;
-  const ICON_KEY = `<svg class="${NS}-setting-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="M18 5l2 2"/><path d="M15 8l2 2"/></svg>`;
   const ICON_BOOKMARK = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
-  const SETTING_ICONS = { combined: ICON_COMBINED };
 
   function mkToggle(key) {
     const row = document.createElement("div"); row.className = `${NS}-setting-row`;
     row.dataset.settingKey = key;
     const info = document.createElement("div"); info.className = `${NS}-setting-info`;
     const labelLine = document.createElement("span"); labelLine.className = `${NS}-setting-label-line`;
-    if (key === "sharingan") labelLine.innerHTML = SHARINGAN_ICON;
-    else if (SETTING_ICONS[key]) labelLine.innerHTML = SETTING_ICONS[key];
     const lbl = document.createElement("span"); lbl.className = `${NS}-setting-label`; lbl.textContent = t("opt" + key[0].toUpperCase() + key.slice(1));
     labelLine.appendChild(lbl);
     const desc = document.createElement("span"); desc.className = `${NS}-setting-desc`; desc.textContent = t("opt" + key[0].toUpperCase() + key.slice(1) + "Desc");
@@ -125,8 +120,61 @@
     return group;
   }
 
+  function formatActivationShortcut(value) {
+    const raw = String(value || "");
+    if (!raw) return "";
+    const isMac = /Mac|iPhone|iPad|iPod/i.test((navigator && navigator.platform) || "");
+    if (!isMac) return raw;
+    const symbols = { Alt:"\u2325", Shift:"\u21e7", Command:"\u2318", Ctrl:"\u2303", MacCtrl:"\u2303" };
+    return raw.split("+").map(part => symbols[part] || part).join("");
+  }
+
+  function refreshProSettingsSummary() {
+    if (!settingsPanel) return;
+    const block = settingsPanel.querySelector(`.${NS}-settings-pro`);
+    if (!block) return;
+    const title = block.querySelector(`.${NS}-settings-pro-title`);
+    if (title) title.textContent = t("proShortcutTitle");
+    const hint = block.querySelector(`.${NS}-settings-pro-hint`);
+    if (hint) hint.textContent = t("proShortcutHint");
+    const shortcut = block.querySelector(`.${NS}-settings-shortcut-current`);
+    const edit = block.querySelector(`.${NS}-settings-shortcut-edit`);
+    const assigned = !!HOST.activationShortcut;
+    if (shortcut) {
+      shortcut.textContent = assigned ? formatActivationShortcut(HOST.activationShortcut) : t("shortcutUnassigned");
+      shortcut.classList.toggle(`${NS}-settings-shortcut-unassigned`, !assigned);
+    }
+    if (edit) edit.textContent = t(assigned ? "shortcutChange" : "shortcutSet");
+  }
+
+  function mkProSettingsSummary() {
+    const wrap = document.createElement("div"); wrap.className = `${NS}-settings-pro`;
+    const head = document.createElement("div"); head.className = `${NS}-settings-pro-head`;
+
+    const meta = document.createElement("div"); meta.className = `${NS}-settings-pro-meta`;
+    const labelLine = document.createElement("div"); labelLine.className = `${NS}-settings-pro-label-line`;
+    const badge = document.createElement("span"); badge.className = `${NS}-pro-badge`; badge.textContent = "Pro";
+    const title = document.createElement("span"); title.className = `${NS}-settings-pro-title`;
+    labelLine.appendChild(badge); labelLine.appendChild(title);
+    const hint = document.createElement("span"); hint.className = `${NS}-settings-pro-hint`;
+    meta.appendChild(labelLine); meta.appendChild(hint);
+
+    const shortcutBtn = document.createElement("button"); shortcutBtn.type = "button"; shortcutBtn.className = `${NS}-settings-shortcut-action`;
+    const shortcut = document.createElement("kbd"); shortcut.className = `${NS}-settings-shortcut-current`;
+    const edit = document.createElement("span"); edit.className = `${NS}-settings-shortcut-edit`;
+    shortcutBtn.appendChild(shortcut); shortcutBtn.appendChild(edit);
+    shortcutBtn.onclick = (e) => {
+      e.stopPropagation();
+      if (HOST.openShortcutSettings) HOST.openShortcutSettings();
+      else if (HOST.openOptions) HOST.openOptions();
+    };
+
+    head.appendChild(meta); head.appendChild(shortcutBtn); wrap.appendChild(head);
+    return wrap;
+  }
+
   function createSettingsPanel() {
-    settingsPanel = document.createElement("div"); settingsPanel.className = `${NS}-root ${NS}-settings`;
+    settingsPanel = document.createElement("div"); settingsPanel.className = `${NS}-root ${NS}-settings${HOST.isExtension ? ` ${NS}-pro` : ""}`;
     const hdr = document.createElement("div"); hdr.className = `${NS}-settings-header`;
     const title = document.createElement("span"); title.className = `${NS}-settings-title`; title.textContent = t("settings");
     const langWrap = document.createElement("div"); langWrap.className = `${NS}-setting-row`; langWrap.dataset.settingKey = "lang";
@@ -148,7 +196,6 @@
     closeBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
     closeBtn.title = t("close"); closeBtn.onclick = closeSettings;
     hdr.appendChild(title); hdr.appendChild(closeBtn); settingsPanel.appendChild(hdr);
-    settingsPanel.appendChild(mkSettingGroup("general"));
     settingsPanel.appendChild(langWrap);
     settingsPanel.appendChild(mkToggle("combined"));
     settingsPanel.appendChild(mkToggle("sharingan"));
@@ -159,10 +206,11 @@
       const row = extra && extra.type === "select" ? mkExtraSelect(extra) : mkExtraToggle(extra);
       if (row) settingsPanel.appendChild(row);
     });
-    // Extension → license status + activate/manage (all state lives here, no
-    // popup window). Bookmarklet → a quiet "get the Pro extension" cross-link.
-    settingsPanel.appendChild(HOST.licensing ? mkSettingsLicense() : mkSettingsPromo());
+    // Keep the in-page panel focused on daily use. Lifetime-license management
+    // stays in the options page; Pro shows only the real activation shortcut.
+    settingsPanel.appendChild(HOST.isExtension ? mkProSettingsSummary() : mkSettingsPromo());
     document.body.appendChild(settingsPanel);
+    refreshProSettingsSummary();
     const cr = chatPanel.getBoundingClientRect();
     settingsPanel.style.bottom = (window.innerHeight - cr.top + 4) + "px";
     settingsPanel.style.right = Math.max(8, window.innerWidth - cr.right) + "px";
@@ -190,14 +238,7 @@
       const dd = promo.querySelector(`.${NS}-settings-promo-desc`); if (dd) dd.textContent = t(isExt ? "freePromoDesc" : "proPromoDesc");
       const cc = promo.querySelector(`.${NS}-settings-promo-cta`); if (cc) cc.textContent = t(isExt ? "freePromoCta" : "proPromoCta");
     }
-    const licBlock = settingsPanel.querySelector(`.${NS}-settings-license`);
-    if (licBlock && HOST.licensing) {
-      const state = licBlock.dataset.licState || "none";
-      const lbl = licBlock.querySelector(`.${NS}-license-label-text`); if (lbl) lbl.textContent = t("licLabel");
-      const badge = licBlock.querySelector(`.${NS}-license-state`); if (badge) badge.textContent = licStateName(state);
-      const desc = licBlock.querySelector(`.${NS}-license-desc`); if (desc) desc.textContent = licDescText(HOST.licensing);
-      const act = licBlock.querySelector(`.${NS}-license-action`); if (act) act.textContent = licActionText(HOST.licensing);
-    }
+    refreshProSettingsSummary();
   }
 
   // Subtle cross-link shown at the bottom of the settings panel.
@@ -217,55 +258,6 @@
     const cta = document.createElement("span"); cta.className = `${NS}-settings-promo-cta`;
     cta.textContent = t(isExt ? "freePromoCta" : "proPromoCta");
     wrap.appendChild(title); wrap.appendChild(desc); wrap.appendChild(cta);
-    return wrap;
-  }
-
-  // ── License status block (extension only) ──────────────────
-  // Shows trial / active / inactive state + the trial countdown, plus an
-  // Activate or Manage link, and a quiet link back to the free bookmarklet —
-  // i.e. everything the old popup window showed, now inside the in-page menu.
-  function licStateName(state) {
-    return state === "active" ? t("licActive") : t("licNone");
-  }
-  function licDescText(lic) {
-    const state = lic.state || (lic.active ? "active" : "none");
-    return state === "active" ? t("licActiveNote") : t("licNoneNote");
-  }
-  function licActionText(lic) {
-    const state = lic.state || (lic.active ? "active" : "none");
-    return state === "active" ? t("licManage") : t("licActivate");
-  }
-  function licActionUrl(lic) {
-    const state = lic.state || (lic.active ? "active" : "none");
-    // Activate → the marketing site (it carries the details + purchase flow).
-    // Manage → Stripe customer portal.
-    return state === "active" ? (lic.portalUrl || EXT_LANDING_URL) : EXT_LANDING_URL;
-  }
-  function mkSettingsLicense() {
-    const lic = HOST.licensing || { state: "none" };
-    const state = lic.state || (lic.active ? "active" : "none");
-    const wrap = document.createElement("div");
-    wrap.className = `${NS}-settings-license`;
-    wrap.dataset.licState = state;
-
-    const row = document.createElement("div"); row.className = `${NS}-license-row`;
-    const label = document.createElement("span"); label.className = `${NS}-license-label`;
-    label.innerHTML = ICON_KEY;
-    const labelText = document.createElement("span"); labelText.className = `${NS}-license-label-text`; labelText.textContent = t("licLabel");
-    label.appendChild(labelText);
-    const badge = document.createElement("span"); badge.className = `${NS}-license-state`; badge.dataset.state = state; badge.textContent = licStateName(state);
-    row.appendChild(label); row.appendChild(badge); wrap.appendChild(row);
-
-    const desc = document.createElement("span"); desc.className = `${NS}-license-desc`; desc.textContent = licDescText(lic);
-    wrap.appendChild(desc);
-
-    const action = document.createElement("a"); action.className = `${NS}-license-action`;
-    action.href = licActionUrl(lic); action.target = "_blank"; action.rel = "noopener noreferrer";
-    action.textContent = licActionText(lic);
-    action.onclick = (e) => { e.stopPropagation(); };
-    wrap.appendChild(action);
-    // The free bookmarklet is presented on the marketing site, not in this menu.
-
     return wrap;
   }
 
@@ -307,7 +299,7 @@
   function setCopyButtonIdle(btn) {
     // While a result panel is open, the Copy button copies that panel's text
     // instead of the current element prompt.
-    const label = pendingGenPrompt ? t(pendingResultCopyKey || "copyGenPrompt") : copyButtonLabel();
+    const label = pendingGenPrompt ? t(pendingResultCopyKey || "copyMarkdown") : copyButtonLabel();
     if (pendingGenPrompt) btn.textContent = label;
     else btn.innerHTML = settings.sharingan ? `${SHARINGAN_ICON}<span>${label}</span>` : label;
     btn.title = label;
@@ -325,12 +317,13 @@
     ];
     // \u2318M copies rendered content as Markdown in both bookmarklet and Pro.
     items.push(`<span><kbd>\u2318M</kbd> ${t("skMarkdown")}</span>`);
-    // \u2318I (image \u2192 generation prompt) is Pro/extension-only.
-    if (HOST.reversePrompt || HOST.reversePromptStream) items.push(`<span><kbd>\u2318I</kbd> ${t("skRevPrompt")}</span>`);
     items.push(`<span><kbd>\u2318Z</kbd> ${t("skUndo")}</span>`);
     items.push(`<span><kbd>Esc</kbd> ${selectedElements.length ? t("skClear") : t("skPause")}</span>`);
-    // Extension activation shortcut (toolbar/Alt+S re-opens the menu on any page).
-    if (HOST.isExtension) items.push(`<span><kbd>Alt+S</kbd> ${t("skActivate")}</span>`);
+    // Display Chrome's current assignment, including user customization.
+    if (HOST.isExtension && HOST.activationShortcut) {
+      const shortcut = String(HOST.activationShortcut).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[ch]);
+      items.push(`<span><kbd>${shortcut}</kbd> ${t("skActivate")}</span>`);
+    }
     sc.innerHTML = items.join("");
   }
 

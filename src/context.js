@@ -57,7 +57,7 @@
   }
 
   function shouldIncludeHtml(el, ctx) {
-    if (ctx.text || ctx.locator || ctx.source || ctx.react || Object.keys(ctx.dataAttrs).length) return false;
+    if (ctx.text || ctx.locator || ctx.source || ctx.react || ctx.vue || Object.keys(ctx.dataAttrs).length) return false;
     if (el.children.length > 4) return false;
     if (ctx.selector && !ctx.selector.includes("nth-of-type") && !ctx.selector.startsWith("body >")) return false;
     return true;
@@ -90,6 +90,17 @@
       const result = {};
       let walker = f;
       while (walker) { if (walker._debugSource) { const s=walker._debugSource; result.source=`${s.fileName.replace(/^.*?\/src\//, "src/")}:${s.lineNumber}`; break; } walker=walker.return; }
+      if (!result.source) {
+        // React 19 removed fiber._debugSource; dev builds carry _debugStack
+        // (an Error captured at element creation) instead.
+        walker = f;
+        let depth = 0;
+        while (walker && depth++ < 30) {
+          const stackSource = sourceFromDebugStack(walker);
+          if (stackSource) { result.source = stackSource; break; }
+          walker = walker.return;
+        }
+      }
       const components = [];
       walker = f;
       while (walker) {
@@ -102,6 +113,152 @@
       if (components.length) result.react = components.reverse().join(" \u203a ");
       return result;
     } catch(_) { return {}; }
+  }
+
+  // Parse a React 19 _debugStack (dev-only Error) for the JSX callsite.
+  // Handles the URL shapes dev servers actually emit: plain dev-server paths
+  // (Vite: http://localhost:5173/src/App.tsx?t=123:12:5) and webpack bundles
+  // (webpack-internal:///(app-pages-browser)/./src/app/page.tsx:12:88).
+  function sourceFromDebugStack(node) {
+    try {
+      const stack = node && node._debugStack && node._debugStack.stack;
+      if (!stack) return "";
+      for (const line of String(stack).split("\n")) {
+        const loc = stackFrameLocation(line);
+        if (loc) return loc;
+      }
+    } catch (_) {}
+    return "";
+  }
+
+  function stackFrameLocation(line) {
+    // Lazy \S+? keeps parenthesised webpack-internal URLs intact while the
+    // trailing anchor still peels off Chrome's closing ")".
+    const m = String(line).match(/((?:webpack-internal|https?|file):\/\/\S+?):(\d+):(\d+)\)?\s*$/);
+    if (!m) return "";
+    let file = m[1];
+    if (/node_modules|react-stack-top-frame|chrome-extension:/.test(file)) return "";
+    file = file.replace(/^webpack-internal:\/\/\/(\([^)]*\))?\.?\/?/, "");
+    file = file.replace(/^(?:https?|file):\/\/[^/]*\//, "");
+    file = file.split("?")[0];
+    if (!/\.(jsx|tsx|js|ts|mjs|vue|svelte)$/.test(file)) return "";
+    file = file.replace(/^.*?src\//, "src/").replace(/^\.\//, "");
+    return `${file}:${m[2]}`;
+  }
+
+  // ── Vue debug info ─────────────────────────────────────────
+  // Vue 3 (dev) marks elements with __vueParentComponent (the owning component
+  // instance); Vue 2 marks component roots with __vue__. Walk up the DOM to the
+  // nearest marker, then climb the component parent chain.
+  function getVueComponent(el) {
+    let node = el;
+    let depth = 0;
+    while (node && depth++ < 25) {
+      try {
+        if (node.__vueParentComponent) return { version: 3, instance: node.__vueParentComponent };
+        if (node.__vue__) return { version: 2, instance: node.__vue__ };
+      } catch (_) { return null; }
+      node = node.parentElement;
+    }
+    return null;
+  }
+
+  function vueOptions(instance, version) {
+    return version === 3 ? instance && instance.type : instance && instance.$options;
+  }
+
+  function vueFile(instance, version) {
+    try {
+      const options = vueOptions(instance, version);
+      const file = options && options.__file;
+      if (!file) return "";
+      return String(file).replace(/\\/g, "/").replace(/^.*?src\//, "src/");
+    } catch (_) { return ""; }
+  }
+
+  function vueName(instance, version) {
+    try {
+      const options = vueOptions(instance, version);
+      if (!options) return "";
+      const name = options.name || options.__name;
+      if (name) return name;
+      const match = vueFile(instance, version).match(/([^/]+)\.vue$/);
+      return match ? match[1] : "";
+    } catch (_) { return ""; }
+  }
+
+  function vueParentInstance(instance, version) {
+    try { return version === 3 ? instance.parent : instance.$parent; }
+    catch (_) { return null; }
+  }
+
+  function getVueDebug(el) {
+    try {
+      const found = getVueComponent(el);
+      if (!found) return {};
+      const result = {};
+      const names = [];
+      let walker = found.instance;
+      let depth = 0;
+      while (walker && depth++ < 25) {
+        if (!result.source) {
+          const file = vueFile(walker, found.version);
+          if (file) result.source = file;
+        }
+        const name = vueName(walker, found.version);
+        if (name && isUserComponent(name) && !names.includes(name)) {
+          names.push(name);
+          if (names.length >= 3) break;
+        }
+        walker = vueParentInstance(walker, found.version);
+      }
+      if (names.length) result.vue = names.reverse().join(" \u203a ");
+      return result;
+    } catch(_) { return {}; }
+  }
+
+  // Component props are only attributable to the element when it IS the
+  // component root; deeper template elements would inherit misleading props.
+  function getVuePropsInfo(el) {
+    try {
+      const found = getVueComponent(el);
+      if (!found) return "";
+      const inst = found.instance;
+      const rootEl = found.version === 3 ? (inst.vnode && inst.vnode.el) : inst.$el;
+      if (rootEl !== el) return "";
+      const props = found.version === 3 ? inst.props : inst.$props;
+      if (!props || typeof props !== "object") return "";
+      const useful = [];
+      for (const k of Object.keys(props)) {
+        if (k.startsWith("__") || k === "class" || k === "style") continue;
+        if (isSensitiveName(k)) { useful.push(`${k}:[masked]`); continue; }
+        let v; try { v = props[k]; } catch (_) { continue; }
+        if (v === null || v === undefined) useful.push(`${k}:null`);
+        else if (typeof v === "function") useful.push(`${k}:fn`);
+        else if (typeof v === "object") {
+          try { const s = JSON.stringify(v); useful.push(`${k}:${s.length > 60 ? s.slice(0, 60) + "\u2026" : s}`); }
+          catch (_) { useful.push(`${k}:{...}`); }
+        }
+        else useful.push(`${k}:${truncate(String(v), 80)}`);
+        if (useful.length >= 8) break;
+      }
+      return useful.join(", ");
+    } catch(_) { return ""; }
+  }
+
+  // ── Host test locators (HOST_CONTRACT.md §1.7) ─────────────
+  // Pro supplies ready-to-paste test locators with uniqueness annotations.
+  // Bookmarklet has no HOST.buildTestLocators → returns null → no output.
+  function hostTestLocators(el) {
+    if (!HOST.buildTestLocators) return null;
+    try {
+      const rows = HOST.buildTestLocators(el);
+      if (Array.isArray(rows) && rows.length) {
+        const cleaned = rows.map(r => truncate(String(r), 200)).filter(Boolean).slice(0, 6);
+        if (cleaned.length) return cleaned;
+      }
+    } catch (_) {}
+    return null;
   }
 
   function getReactPropsInfo(el) {
@@ -162,7 +319,9 @@
       dataAttrs[attr.name] = truncate(attr.value, 120);
     }
     const reactInfo = getReactDebug(el);
+    const vueInfo = (reactInfo.react || reactInfo.source) ? {} : getVueDebug(el);
     const reactProps = getReactPropsInfo(el) || { className: "", props: "" };
+    const frameworkProps = reactProps.props || getVuePropsInfo(el);
     const classTokens = unique([
       ...Array.from(el.classList),
       ...String(reactProps.className || "").split(/\s+/).filter(Boolean),
@@ -173,7 +332,7 @@
     const ctx = {
       index, aiId: el.getAttribute(AI_ID), locator, tag: el.tagName.toLowerCase(),
       text: shouldIncludeText(text, locator) ? text : "", classes: classTokens,
-      dataAttrs, reactProps: reactProps.props, ...reactInfo,
+      dataAttrs, reactProps: frameworkProps, ...reactInfo, ...vueInfo,
     };
     ctx.title = contextTitle(el, ctx);
     ctx.inside = getSemanticContextStr(el);
@@ -194,6 +353,8 @@
   function elementKind(el, ctx) {
     const reactLast = ctx.react && ctx.react.split(" \u203a ").pop();
     if (reactLast && /^[A-Z]/.test(reactLast)) return reactLast;
+    const vueLast = ctx.vue && ctx.vue.split(" \u203a ").pop();
+    if (vueLast && /^[A-Z]/.test(vueLast)) return vueLast;
     const role = explicitOrImplicitRole(el);
     if (role) return role;
     const tag = el.tagName.toLowerCase();
@@ -219,7 +380,7 @@
     if (!selector) return false;
     const durableDirect = selector.length <= 120 && (/^#/.test(selector) || /^\[data-/.test(selector) || /^[a-z]+\[data-/.test(selector));
     if (durableDirect) return true;
-    const hasStrongIdentity = ctx.locator || ctx.react || ctx.source || ctx.text || Object.keys(ctx.dataAttrs).length;
+    const hasStrongIdentity = ctx.locator || ctx.react || ctx.vue || ctx.source || ctx.text || Object.keys(ctx.dataAttrs).length;
     if (hasStrongIdentity) return false;
     return selector.length <= 180;
   }

@@ -43,6 +43,8 @@
         lines.push(`## Element ${i + 1}: ${ctx.title} <${ctx.tag}>`, "");
         if (note) appendMarkdownSection(lines, "Instruction", note);
         appendMarkdownSection(lines, "Identity", codeBlock(getIdentityReport(el, ctx), "text"));
+        const testLocators = hostTestLocators(el);
+        if (testLocators) appendMarkdownSection(lines, "Test Locators", codeBlock(testLocators.join("\n"), "js"));
         appendMarkdownSection(lines, "Geometry", codeBlock(getGeometryReport(el), "text"));
         const rootReport = getReplicaRootReport(el, replicaRoot);
         if (rootReport) appendMarkdownSection(lines, "Replica Root", codeBlock(rootReport, "text"));
@@ -84,6 +86,8 @@
         if (outline) appendMarkdownSection(lines, "Children Outline", codeBlock(outline, "text"));
         const react = getReactDetailsReport(el);
         if (react && react !== "none") appendMarkdownSection(lines, "React Details", codeBlock(react, "json"));
+        const vue = getVueDetailsReport(el);
+        if (vue && vue !== "none") appendMarkdownSection(lines, "Vue Details", codeBlock(vue, "json"));
         appendMarkdownSection(lines, "Context", codeBlock(getContextReport(el), "text"));
       });
     } finally {
@@ -156,6 +160,7 @@
       ["domPath", buildDomPath(el)],
       ["source", ctx.source],
       ["react", ctx.react],
+      ["vue", ctx.vue],
       ["aiId", el.getAttribute(AI_ID)],
     ];
     return rows.filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join("\n") || "none";
@@ -252,7 +257,7 @@
   // Inline same-origin (or CORS-OK) <img> sources as data URLs via canvas
   // drawing — synchronous because the browser already cached/decoded the pixels.
   // Skips huge images and CORS-tainted sources (canvas.toDataURL throws).
-  const IMAGE_INLINE_PIXEL_LIMIT = 1_000_000;  // 1MP
+  const IMAGE_INLINE_PIXEL_LIMIT = Number(HOST.imageInlinePixelLimit) || 1_000_000;
   const IMAGE_INLINE_DATAURL_LIMIT = 120_000;  // ~90KB binary
 
   function buildImageInlineMap(root) {
@@ -790,12 +795,25 @@
     const cs = getComputedStyle(el);
     const rootVars = getRootCssVars();
     const rows = [];
+    // Origin resolution is bounded: the ancestor computed-style chain and the
+    // custom-property rule index are built lazily on first use and only the
+    // first CSS_VAR_ORIGIN_LIMIT variables get the (more expensive) lookup.
+    let originBudget = CSS_VAR_ORIGIN_LIMIT;
+    let chain = null;
+    let ruleIndex = null;
     for (let i = 0; i < cs.length; i++) {
       const name = cs[i];
       if (!name || !name.startsWith("--")) continue;
       const value = cs.getPropertyValue(name).trim();
       if (rootVars.get(name) === value) continue;  // identical to :root → covered by Document Context
-      const annotation = rootVars.has(name) ? " /* overrides :root */" : "";
+      let annotation = rootVars.has(name) ? " /* overrides :root */" : "";
+      if (originBudget > 0) {
+        originBudget--;
+        if (chain === null) chain = buildComputedAncestorChain(el);
+        if (ruleIndex === null) ruleIndex = buildCustomPropertyRuleIndex();
+        const origin = describeCssVarOrigin(el, name, value, chain, ruleIndex);
+        if (origin) annotation = ` /* ${origin}${rootVars.has(name) ? "; overrides :root" : ""} */`;
+      }
       rows.push(`${name}: ${limitText(value, 1000, "value truncated")}${annotation}`);
       if (rows.length >= 120) {
         rows.push("... CSS variables truncated after 120 entries");
@@ -803,6 +821,92 @@
       }
     }
     return rows.join("\n");
+  }
+
+  // ── CSS custom-property origin ──────────────────────────────
+  // "Where does this variable's value come from?" — the missing link between
+  // Effective Style (values) and Matched Rules (rules). Two steps:
+  //   1. walk up the ancestor chain: the highest node whose computed value
+  //      still equals the element's is where the value enters the cascade;
+  //   2. name the defining rule from a one-pass index of every stylesheet
+  //      rule that sets custom properties (cross-origin sheets included via
+  //      the host cache when available).
+  const CSS_VAR_ORIGIN_LIMIT = 40;
+
+  function buildComputedAncestorChain(el) {
+    const chain = [];
+    let node = el;
+    let depth = 0;
+    while (node && node.nodeType === 1 && depth++ < 60) {
+      try { chain.push({ node, cs: getComputedStyle(node) }); } catch (_) {}
+      node = node.parentElement;
+    }
+    return chain;
+  }
+
+  function buildCustomPropertyRuleIndex() {
+    const index = new Map(); // property name → [{selector, source}]
+    let total = 0;
+    Array.from(document.styleSheets || []).forEach((sheet, sheetIdx) => {
+      if (total >= 800) return;
+      const rules = readableSheetRules(sheet, sheetIdx, null);
+      if (!rules) return;
+      const walk = (list) => {
+        for (const rule of Array.from(list)) {
+          if (total >= 800) return;
+          if (rule.selectorText && rule.style) {
+            for (let i = 0; i < rule.style.length; i++) {
+              const prop = rule.style[i];
+              if (!prop || !prop.startsWith("--")) continue;
+              let entries = index.get(prop);
+              if (!entries) { entries = []; index.set(prop, entries); }
+              if (entries.length < 6) {
+                entries.push({ selector: rule.selectorText, source: sheetLabel(sheet, sheetIdx) });
+                total++;
+              }
+            }
+          } else if (rule.cssRules) {
+            // Skip conditional groups that do not currently apply — naming a
+            // dormant @media rule as a variable's origin would be wrong.
+            if (rule.media) {
+              try { if (!matchMedia(rule.media.mediaText).matches) continue; } catch (_) {}
+            }
+            walk(rule.cssRules);
+          }
+        }
+      };
+      try { walk(rules); } catch (_) {}
+    });
+    return index;
+  }
+
+  function describeCssVarOrigin(el, name, value, chain, ruleIndex) {
+    let definer = el;
+    for (let i = 1; i < chain.length; i++) {
+      let inherited = "";
+      try { inherited = chain[i].cs.getPropertyValue(name).trim(); } catch (_) {}
+      if (inherited === value) definer = chain[i].node;
+      else break;
+    }
+    try {
+      if (definer.style && definer.style.getPropertyValue(name).trim()) {
+        return `set inline on ${describeElement(definer)}`;
+      }
+    } catch (_) {}
+    // Later rules win at equal specificity, so probe in reverse source order.
+    const entries = (ruleIndex.get(name) || []).slice().reverse();
+    for (const entry of entries) {
+      for (const part of splitSelector(entry.selector)) {
+        try {
+          if (definer.matches(part)) {
+            const where = definer === el ? "" : ` on ${describeElement(definer)}`;
+            return `set by \`${entry.selector}\` (${entry.source})${where}`;
+          }
+        } catch (_) {}
+      }
+    }
+    if (definer !== el) return `inherited from ${describeElement(definer)}`;
+    return "";
   }
 
   // Three flavors of matched-rule extraction share one walker. Modes:
@@ -855,32 +959,33 @@
     return false;
   }
 
+  // ── Host stylesheet seam (HOST_CONTRACT.md §11) ──────
+  // Cross-origin stylesheets throw on .cssRules access. The extension
+  // pre-warms a cache (copyPrompt → HOST.prepareStyles) that fetches the
+  // raw text and parses it into a CSSStyleSheet; here we read the parsed
+  // rules synchronously and walk them like any same-origin sheet. Miss →
+  // null (bookmarklet), optionally recorded in the caller's inaccessible list.
+  function readableSheetRules(sheet, index, inaccessible) {
+    try { return sheet.cssRules; }
+    catch (_) {
+      if (HOST.cachedStylesheetRules) {
+        try {
+          const hostedRules = HOST.cachedStylesheetRules(sheet.href);
+          if (hostedRules) return hostedRules;
+        } catch (_) { /* fall through */ }
+      }
+      if (inaccessible) inaccessible.push(sheet.href || `stylesheet #${index + 1}`);
+      return null;
+    }
+  }
+
   function getMatchedCssRulesReport(el) {
     const state = makeRuleState({ maxRows: 400, maxChars: 90000 });
     const hints = buildDescendantHints(el);
     const inaccessible = [];
     Array.from(document.styleSheets || []).forEach((sheet, index) => {
-      let rules;
-      try { rules = sheet.cssRules; }
-      catch (_) {
-        // ── Host stylesheet seam (HOST_CONTRACT.md §11) ──────
-        // Cross-origin stylesheets throw on .cssRules access. The extension
-        // pre-warms a cache (copyPrompt → HOST.prepareStyles) that fetches the
-        // raw text and parses it into a CSSStyleSheet; here we read the parsed
-        // rules synchronously and walk them like any same-origin sheet. Miss →
-        // fall back to the existing "Inaccessible stylesheets" note (bookmarklet).
-        if (HOST.cachedStylesheetRules) {
-          try {
-            const hostedRules = HOST.cachedStylesheetRules(sheet.href);
-            if (hostedRules) {
-              walkCssRules(el, hostedRules, sheetLabel(sheet, index), [], state, "normal", hints);
-              return;
-            }
-          } catch (_) { /* fall through to inaccessible note */ }
-        }
-        inaccessible.push(sheet.href || `stylesheet #${index + 1}`);
-        return;
-      }
+      const rules = readableSheetRules(sheet, index, inaccessible);
+      if (!rules) return;
       walkCssRules(el, rules, sheetLabel(sheet, index), [], state, "normal", hints);
     });
     const rows = state.rows.slice();
@@ -898,9 +1003,8 @@
     const state = makeRuleState({ maxRows: 200, maxChars: 50000 });
     const hints = buildDescendantHints(el);
     Array.from(document.styleSheets || []).forEach((sheet, index) => {
-      let rules;
-      try { rules = sheet.cssRules; }
-      catch (_) { return; }
+      const rules = readableSheetRules(sheet, index, null);
+      if (!rules) return;
       walkCssRules(el, rules, sheetLabel(sheet, index), [], state, "interactive", hints);
     });
     if (state.truncated) state.rows.push("", "/* Interactive rules truncated. */");
@@ -990,7 +1094,8 @@
     const state = makeRuleState({ maxRows: 60, maxChars: ANCESTOR_RULES_CHAR_CAP });
     state.dedupCheck = true;
     Array.from(document.styleSheets || []).forEach((sheet, idx) => {
-      let rules; try { rules = sheet.cssRules; } catch (_) { return; }
+      const rules = readableSheetRules(sheet, idx, null);
+      if (!rules) return;
       walkCssRules(node, rules, sheetLabel(sheet, idx), [], state, "normal", null);
     });
     return state.rows.join("\n");
@@ -1019,9 +1124,8 @@
     const state = makeRuleState({ maxRows: 120, maxChars: 30000 });
     const hints = buildDescendantHints(el);
     Array.from(document.styleSheets || []).forEach((sheet, index) => {
-      let rules;
-      try { rules = sheet.cssRules; }
-      catch (_) { return; }
+      const rules = readableSheetRules(sheet, index, null);
+      if (!rules) return;
       walkCssRules(el, rules, sheetLabel(sheet, index), [], state, "color-scheme", hints);
     });
     if (state.truncated) state.rows.push("", "/* Color-scheme rules truncated. */");
@@ -1667,7 +1771,7 @@
     let count = 0;
     while (walker && count < 8) {
       const name = fiberDisplayName(walker);
-      const source = walker._debugSource ? debugSourceText(walker._debugSource) : "";
+      const source = walker._debugSource ? debugSourceText(walker._debugSource) : sourceFromDebugStack(walker);
       const shouldShow = count === 0 || source || isUserComponent(name);
       if (shouldShow) {
         rows.push({
@@ -1682,6 +1786,66 @@
       walker = walker.return;
     }
     return limitText(JSON.stringify(rows, null, 2), 50000, "React details truncated");
+  }
+
+  // Vue counterpart of React Details: the owning component chain with per-
+  // component file, props and reactive state. Vue 3 setupState auto-unwraps
+  // refs; Vue 2 exposes $data. Both go through normalizeForReport for masking,
+  // depth limits and circular-reference safety.
+  function getVueDetailsReport(el) {
+    const found = getVueComponent(el);
+    if (!found) return "none";
+    const rows = [];
+    let walker = found.instance;
+    let count = 0;
+    while (walker && count < 8) {
+      let props = null, state = null;
+      try { props = found.version === 3 ? walker.props : walker.$props; } catch (_) {}
+      try { state = found.version === 3 ? walker.setupState : walker.$data; } catch (_) {}
+      const row = { name: vueName(walker, found.version) || "anonymous" };
+      const file = vueFile(walker, found.version);
+      if (file) row.file = file;
+      try {
+        if (props && typeof props === "object" && Object.keys(props).length) {
+          row.props = normalizeForReport(props, 0, new WeakSet(), "props");
+        }
+      } catch (_) {}
+      try {
+        if (state && typeof state === "object") {
+          // <script setup> exposes imported child components and the props
+          // binding through setupState — actual reactive state only, please.
+          const cleaned = {};
+          for (const key of Object.keys(state)) {
+            let v; try { v = state[key]; } catch (_) { continue; }
+            if (isVueComponentLike(v)) continue;
+            if (typeof v === "function") continue;
+            // The `props` setup binding mirrors instance.props (dev wraps it
+            // in shallowReadonly, so reference equality never holds).
+            if (key === "props" && props && v && typeof v === "object") {
+              try {
+                const stateKeys = Object.keys(v);
+                const propKeys = Object.keys(props);
+                if (stateKeys.length === propKeys.length && stateKeys.every(k => propKeys.indexOf(k) !== -1)) continue;
+              } catch (_) {}
+            }
+            cleaned[key] = v;
+          }
+          if (Object.keys(cleaned).length) {
+            row.state = normalizeForReport(cleaned, 0, new WeakSet(), "state");
+          }
+        }
+      } catch (_) {}
+      rows.push(row);
+      count++;
+      walker = vueParentInstance(walker, found.version);
+    }
+    if (!rows.length) return "none";
+    return limitText(JSON.stringify(rows, null, 2), 50000, "Vue details truncated");
+  }
+
+  function isVueComponentLike(value) {
+    if (!value || typeof value !== "object") return false;
+    return !!(value.__file || value.__name || typeof value.setup === "function" || typeof value.render === "function");
   }
 
   // Document Context — root-level info that decides how the element is

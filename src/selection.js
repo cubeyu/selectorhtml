@@ -65,7 +65,7 @@
   }
 
   // ── Hover overlay ────────────────────────────────────────────
-  function createHoverBox() { hoverBox = document.createElement("div"); hoverBox.className = `${NS}-hover-box`; document.body.appendChild(hoverBox); }
+  function createHoverBox() { hoverBox = document.createElement("div"); hoverBox.className = `${NS}-hover-box${HOST.isExtension ? ` ${NS}-pro-hover` : ""}`; document.body.appendChild(hoverBox); }
   function showHover(el) {
     if (!el || isEditorElement(el) || selectedElements.includes(el)) { hoverBox.style.opacity = "0"; return; }
     const r = el.getBoundingClientRect();
@@ -124,15 +124,15 @@
   // ── Selection overlays ──────────────────────────────────────
   function createSelOverlay(el) {
     const aiId = el.getAttribute(AI_ID); if (selOverlays.has(aiId)) return;
-    const box = document.createElement("div"); box.className = `${NS}-sel-box`;
-    const corners = [0,1,2,3].map(i => { const c = document.createElement("div"); c.className = `${NS}-sel-corner`; c.style.animationDelay = `${i*28}ms`; document.body.appendChild(c); return c; });
-    const label = document.createElement("div"); label.className = `${NS}-sel-label`; label.textContent = elementLabel(el);
+    const box = document.createElement("div"); box.className = `${NS}-sel-box${HOST.isExtension ? ` ${NS}-pro-selection` : ""}`;
+    const corners = [0,1,2,3].map(i => { const c = document.createElement("div"); c.className = `${NS}-sel-corner${HOST.isExtension ? ` ${NS}-pro-corner` : ""}`; c.style.animationDelay = `${i*28}ms`; document.body.appendChild(c); return c; });
+    const label = document.createElement("div"); label.className = `${NS}-sel-label${HOST.isExtension ? ` ${NS}-pro-selection-label` : ""}`; label.textContent = elementLabel(el);
     const annotateBtn = document.createElement("button");
-    annotateBtn.className = `${NS}-root ${NS}-annotate-btn`; annotateBtn.title = t("addInstruction");
+    annotateBtn.className = `${NS}-root ${NS}-annotate-btn${HOST.isExtension ? ` ${NS}-pro-annotate` : ""}`; annotateBtn.title = t("addInstruction");
     annotateBtn.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
     annotateBtn.onclick = (e) => { e.stopPropagation(); e.preventDefault(); showAnnotationPopover(el, annotateBtn); };
     const markdownBtn = document.createElement("button");
-    markdownBtn.className = `${NS}-root ${NS}-annotate-btn ${NS}-markdown-btn`; markdownBtn.title = t("copyMarkdown");
+    markdownBtn.className = `${NS}-root ${NS}-annotate-btn ${NS}-markdown-btn${HOST.isExtension ? ` ${NS}-pro-annotate` : ""}`; markdownBtn.title = t("copyMarkdown");
     markdownBtn.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></svg>';
     markdownBtn.onclick = (e) => { e.stopPropagation(); e.preventDefault(); copyAsMarkdown([el]); };
     document.body.appendChild(box); document.body.appendChild(label); document.body.appendChild(annotateBtn); document.body.appendChild(markdownBtn);
@@ -153,7 +153,11 @@
   function positionAllOverlays() { for (const el of selectedElements) positionSelOverlay(el); }
   function destroySelOverlay(aiId) { const ov=selOverlays.get(aiId); if(!ov)return; ov.box.remove(); ov.corners.forEach(c=>c.remove()); ov.label.remove(); ov.annotateBtn.remove(); ov.markdownBtn.remove(); selOverlays.delete(aiId); }
   function destroyAllOverlays() { for (const [aiId] of selOverlays) destroySelOverlay(aiId); }
-  function addSelection(el) { if (!selectedElements.includes(el)) { selectedElements.push(el); createSelOverlay(el); } }
+  function addSelection(el) {
+    if (!el || selectedElements.includes(el)) return;
+    if (!el.hasAttribute(AI_ID)) el.setAttribute(AI_ID, `el-${aiIdCounter++}`);
+    selectedElements.push(el); createSelOverlay(el);
+  }
   function removeSelection(el) { const idx=selectedElements.indexOf(el); if(idx>=0){ selectedElements.splice(idx,1); destroySelOverlay(el.getAttribute(AI_ID)); annotations.delete(el.getAttribute(AI_ID)); } }
   function toggleElement(el) { selectedElements.includes(el) ? removeSelection(el) : addSelection(el); }
   function clearSelection() { destroyAllOverlays(); selectedElements=[]; annotations.clear(); removeAnnotationPopover(); }
@@ -202,7 +206,6 @@
     if(mod&&e.key.toLowerCase()==="c"&&!e.shiftKey&&(selectedElements.length>0||pendingGenPrompt)){ e.preventDefault(); copyPrompt(); return; }
     if(mod&&e.shiftKey&&e.key.toLowerCase()==="c"&&selectedElements.length>0){ e.preventDefault(); captureScreenshot(); return; }
     if(mod&&!e.shiftKey&&e.key.toLowerCase()==="m"){ e.preventDefault(); copyAsMarkdown(); return; }
-    if(mod&&!e.shiftKey&&e.key.toLowerCase()==="i"&&(HOST.reversePrompt||HOST.reversePromptStream)&&selectedElements.length>0){ e.preventDefault(); reversePromptForSelection(); return; }
     if(mod&&e.key.toLowerCase()==="z"&&!e.shiftKey){ e.preventDefault(); undo(); return; }
     if(e.key==="ArrowUp"&&selectedElements.length===1){ e.preventDefault(); navigateToParent(); return; }
     if(e.key==="ArrowDown"&&selectedElements.length===1){ e.preventDefault(); navigateToChild(); return; }

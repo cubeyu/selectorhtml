@@ -4,20 +4,29 @@
  */
 (function () {
   "use strict";
-  if (document.querySelector(".ai-editor-root")) return;
+  // Already running: the Pro extension may re-inject after SPA navigations or a
+  // second Alt+S. Prefer a soft resume (unpause / un-minimize) over a no-op.
+  if (document.querySelector(".ai-editor-root")) {
+    try {
+      if (typeof window.__SELECTOR_ON_REACTIVATE__ === "function") {
+        window.__SELECTOR_ON_REACTIVATE__();
+      }
+    } catch (_) {}
+    return;
+  }
 
   const NS = "ai-editor";
   // ── Host capability seam (HOST_CONTRACT.md §0/§1) ────────────
   // The closed-source extension injects window.__SELECTOR_HOST__ in the MAIN
   // world before this core runs, supplying stronger implementations (cross-tab
-  // capture, cross-origin asset fetch, license gating, extra UI rows, ...).
+  // capture, cross-origin asset fetch, extra UI rows, ...).
   // For the free bookmarklet __SELECTOR_HOST__ is undefined → HOST = {} → every
   // seam below falls through to its existing else-branch and behaves exactly as
   // before. Each Host method is OPTIONAL: callers must always keep the original
   // logic as the fallback. Never make a path Host-only.
   const HOST = (typeof window !== "undefined" && window.__SELECTOR_HOST__) || {};
   const AI_ID = "data-ai-id";
-  const VERSION = "0.3.9";
+  const VERSION = "0.4.0";
   // Cross-link targets for the settings-panel promo (bookmarklet ⇄ Pro extension).
   const EXT_LANDING_URL = "https://oil-oil.github.io/selector-extension/";
   const BOOKMARKLET_URL = "https://oil-oil.github.io/selector/";
@@ -26,51 +35,45 @@
   const DICT = {
     en: {
       selecting:"Selecting", paused:"Paused", copyPrompt:"Copy Prompt", copyReport:"Amaterasu!", copyCombined:"Copy + Screenshot", copyScreenshot:"Copy Screenshot",
-      copied:"Copied", copiedFallback:"Copied via fallback", copyFailed:"Copy failed", copiedSaved:"Copied + Saved", exported:"Markdown Exported", screenshotCopied:"Screenshot Copied", screenshotFailed:"Screenshot Failed",
-      settings:"Settings", lang:"Language", addInstruction:"Add instruction", needLicense:"Activate to use",
+      copied:"Copied", copiedFallback:"Copied via fallback", copyFailed:"Copy failed", copiedSaved:"Copied + Saved", exported:"Markdown Exported", screenshotCopied:"Screenshot Copied", screenshotCopiedSaved:"Screenshot Copied + Saved", screenshotFailed:"Screenshot Failed",
+      settings:"Settings", lang:"Language", addInstruction:"Add instruction",
       instrPlaceholder:"Instruction for this element\u2026", clear:"Clear", done:"Done",
       clearAll:"Clear all", minimize:"Minimize", restore:"Restore", close:"Close",
       groupGeneral:"General",
       skSelect:"Select", skMulti:"Multi", skNavigate:"Navigate", skPause:"Pause",
-      skCopy:"Copy", skScreenshot:"Screenshot", skMarkdown:"Markdown", skActivate:"Activate", skUndo:"Undo", skClear:"Clear",
+      skCopy:"Copy", skScreenshot:"Screenshot", skMarkdown:"Markdown", skActivate:"Toggle", skUndo:"Undo", skClear:"Clear",
       optCombined:"Screenshot + text combined", optCombinedDesc:"Copy screenshot and prompt text together",
-      optSharingan:"Sharingan mode", optSharinganDesc:"Copy a pixel-faithful clone report for AI — full DOM, hover/dark CSS, fonts, animations, and design tokens",
+      optSharingan:"Sharingan mode", optSharinganDesc:"Copy a complete DOM, CSS, font and animation report",
       savePng:"Save PNG",
-      proPromoTitle:"Selector Pro", proPromoDesc:"Full-element & full-page shots, cross-origin fidelity, synced settings, Markdown / JSON.", proPromoCta:"Get the extension →",
+      proShortcutTitle:"Activation shortcut", proShortcutHint:"Opens Chrome shortcut settings",
+      shortcutUnassigned:"Not set", shortcutSet:"Set", shortcutChange:"Change",
+      proPromoTitle:"Selector Pro", proPromoDesc:"Always one shortcut away. Stays active across tabs, captures complete elements without dialogs, and syncs your settings.", proPromoCta:"Get the extension →",
       freePromoTitle:"Free bookmarklet", freePromoDesc:"No install — drag a bookmark, use on any page.", freePromoCta:"Open on GitHub →",
-      licLabel:"License", licActive:"Active", licNone:"Inactive",
-      licActiveNote:"Pro is active — thank you", licNoneNote:"Activate to unlock everything",
-      licActivate:"Activate →", licManage:"Manage subscription →", freeLink:"Free bookmarklet version →",
-      skRevPrompt:"→ Prompt", revRunning:"Reading image…", revNoImage:"Select an element first", revFailed:"Couldn't generate a prompt",
-      revTitle:"Image → generation prompt", revCopied:"Copied to clipboard — paste into your image model.", copyGenPrompt:"Copy image prompt",
-      mdTitle:"Markdown ready", copyMarkdown:"Copy Markdown",
+      mdTitle:"Markdown ready", mdPreparing:"Preparing Markdown…", copyMarkdown:"Copy Markdown",
       errUnsupported:"Browser not supported", errCancelled:"Screen choice cancelled",
       errPermission:"Screen recording blocked", errClipboard:"Clipboard blocked",
-      errCapture:"Screenshot failed", errEmpty:"Selected area is empty",
+      errCapture:"Screenshot failed", errEmpty:"Selected area is empty", errDownload:"File save failed",
     },
     zh: {
       selecting:"\u9009\u62e9\u4e2d", paused:"\u5df2\u6682\u505c", copyPrompt:"\u590d\u5236\u63d0\u793a\u8bcd", copyReport:"\u963f\u739b\u7279\u62c9\u65af\uff01", copyCombined:"\u590d\u5236\u56fe\u6587", copyScreenshot:"\u590d\u5236\u622a\u56fe",
-      copied:"\u5df2\u590d\u5236", copiedFallback:"\u5df2\u901a\u8fc7\u5907\u7528\u65b9\u5f0f\u590d\u5236", copyFailed:"\u590d\u5236\u5931\u8d25", copiedSaved:"\u5df2\u590d\u5236\u5e76\u4fdd\u5b58", exported:"Markdown \u5df2\u5bfc\u51fa", screenshotCopied:"\u622a\u56fe\u5df2\u590d\u5236", screenshotFailed:"\u622a\u56fe\u5931\u8d25",
-      settings:"\u8bbe\u7f6e", lang:"\u8bed\u8a00", addInstruction:"\u6dfb\u52a0\u6307\u4ee4", needLicense:"\u6fc0\u6d3b\u540e\u5373\u53ef\u4f7f\u7528",
+      copied:"\u5df2\u590d\u5236", copiedFallback:"\u5df2\u901a\u8fc7\u5907\u7528\u65b9\u5f0f\u590d\u5236", copyFailed:"\u590d\u5236\u5931\u8d25", copiedSaved:"\u5df2\u590d\u5236\u5e76\u4fdd\u5b58", exported:"Markdown \u5df2\u5bfc\u51fa", screenshotCopied:"\u622a\u56fe\u5df2\u590d\u5236", screenshotCopiedSaved:"\u622a\u56fe\u5df2\u590d\u5236\u5e76\u4fdd\u5b58", screenshotFailed:"\u622a\u56fe\u5931\u8d25",
+      settings:"\u8bbe\u7f6e", lang:"\u8bed\u8a00", addInstruction:"\u6dfb\u52a0\u6307\u4ee4",
       instrPlaceholder:"\u6b64\u5143\u7d20\u7684\u4fee\u6539\u6307\u4ee4\u2026", clear:"\u6e05\u9664", done:"\u5b8c\u6210",
       clearAll:"\u6e05\u9664\u5168\u90e8", minimize:"\u6700\u5c0f\u5316", restore:"\u6062\u590d", close:"\u5173\u95ed",
       groupGeneral:"\u901a\u7528",
       skSelect:"\u9009\u62e9", skMulti:"\u591a\u9009", skNavigate:"\u5bfc\u822a", skPause:"\u6682\u505c",
-      skCopy:"\u590d\u5236", skScreenshot:"\u622a\u56fe", skMarkdown:"Markdown", skActivate:"\u6fc0\u6d3b", skUndo:"\u64a4\u9500", skClear:"\u6e05\u9664",
+      skCopy:"\u590d\u5236", skScreenshot:"\u622a\u56fe", skMarkdown:"Markdown", skActivate:"\u5f00/\u5173", skUndo:"\u64a4\u9500", skClear:"\u6e05\u9664",
       optCombined:"\u622a\u56fe + \u6587\u672c\u5408\u5e76", optCombinedDesc:"\u540c\u65f6\u590d\u5236\u622a\u56fe\u548c\u63d0\u793a\u8bcd\u6587\u672c",
-      optSharingan:"\u5199\u8f6e\u773c\u6a21\u5f0f", optSharinganDesc:"\u590d\u5236\u4f9b AI \u50cf\u7d20\u7ea7\u590d\u523b\u7684\u62a5\u544a \u2014\u2014 \u5b8c\u6574 DOM\u3001hover/dark \u6837\u5f0f\u3001\u5b57\u4f53\u3001\u52a8\u753b\u4e0e\u8bbe\u8ba1 token",
+      optSharingan:"\u5199\u8f6e\u773c\u6a21\u5f0f", optSharinganDesc:"\u590d\u5236\u5b8c\u6574 DOM\u3001\u6837\u5f0f\u3001\u5b57\u4f53\u4e0e\u52a8\u753b\u62a5\u544a",
       savePng:"\u4fdd\u5b58 PNG",
-      proPromoTitle:"Selector Pro", proPromoDesc:"\u5b8c\u6574\u5143\u7d20/\u6574\u9875\u622a\u56fe\u3001\u8de8\u57df\u9ad8\u4fdd\u771f\u3001\u8bbe\u7f6e\u540c\u6b65\u3001Markdown / JSON\u3002", proPromoCta:"\u83b7\u53d6\u6d4f\u89c8\u5668\u6269\u5c55 \u2192",
+      proShortcutTitle:"\u542f\u52a8\u5feb\u6377\u952e", proShortcutHint:"\u6253\u5f00 Chrome \u5feb\u6377\u952e\u8bbe\u7f6e",
+      shortcutUnassigned:"\u672a\u8bbe\u7f6e", shortcutSet:"\u8bbe\u7f6e", shortcutChange:"\u4fee\u6539",
+      proPromoTitle:"Selector Pro", proPromoDesc:"\u968f\u65f6\u4e00\u952e\u5524\u8d77\u3002\u5207\u6362\u6807\u7b7e\u4ecd\u4fdd\u6301\u5f00\u542f\u3001\u96f6\u5f39\u7a97\u5b8c\u6574\u622a\u56fe\u3001\u8bbe\u7f6e\u81ea\u52a8\u540c\u6b65\u3002", proPromoCta:"\u83b7\u53d6\u6d4f\u89c8\u5668\u6269\u5c55 \u2192",
       freePromoTitle:"\u514d\u8d39\u4e66\u7b7e\u7248", freePromoDesc:"\u514d\u5b89\u88c5 \u2014\u2014 \u62d6\u4e00\u4e2a\u4e66\u7b7e\uff0c\u4efb\u610f\u9875\u9762\u53ef\u7528\u3002", freePromoCta:"\u5728 GitHub \u6253\u5f00 \u2192",
-      licLabel:"\u6388\u6743", licActive:"\u5df2\u6fc0\u6d3b", licNone:"\u672a\u6fc0\u6d3b",
-      licActiveNote:"Pro \u5df2\u6fc0\u6d3b\uff0c\u611f\u8c22\u652f\u6301", licNoneNote:"\u6fc0\u6d3b\u4ee5\u89e3\u9501\u5168\u90e8\u80fd\u529b",
-      licActivate:"\u6fc0\u6d3b \u2192", licManage:"\u7ba1\u7406\u8ba2\u9605 \u2192", freeLink:"\u514d\u8d39\u4e66\u7b7e\u7248 \u2192",
-      skRevPrompt:"\u53cd\u63a8", revRunning:"\u8bfb\u56fe\u4e2d\u2026", revNoImage:"\u8bf7\u5148\u9009\u4e2d\u4e00\u4e2a\u5143\u7d20", revFailed:"\u53cd\u63a8\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5",
-      revTitle:"\u56fe\u7247 \u2192 \u751f\u6210\u63d0\u793a\u8bcd", revCopied:"\u5df2\u590d\u5236\u5230\u526a\u8d34\u677f \u2014\u2014 \u7c98\u5230\u4f60\u7684\u751f\u56fe\u6a21\u578b\u5373\u53ef\u3002", copyGenPrompt:"\u590d\u5236\u751f\u56fe\u63d0\u793a\u8bcd",
-      mdTitle:"Markdown \u5df2\u751f\u6210", copyMarkdown:"\u590d\u5236 Markdown",
+      mdTitle:"Markdown \u5df2\u751f\u6210", mdPreparing:"Markdown \u751f\u6210\u4e2d\u2026", copyMarkdown:"\u590d\u5236 Markdown",
       errUnsupported:"\u6d4f\u89c8\u5668\u4e0d\u652f\u6301", errCancelled:"\u5df2\u53d6\u6d88\u5c4f\u5e55\u9009\u62e9",
       errPermission:"\u5c4f\u5e55\u5f55\u5236\u6743\u9650\u53d7\u9650", errClipboard:"\u526a\u8d34\u677f\u6743\u9650\u53d7\u9650",
-      errCapture:"\u622a\u56fe\u5931\u8d25", errEmpty:"\u9009\u4e2d\u533a\u57df\u65e0\u6cd5\u622a\u56fe",
+      errCapture:"\u622a\u56fe\u5931\u8d25", errEmpty:"\u9009\u4e2d\u533a\u57df\u65e0\u6cd5\u622a\u56fe", errDownload:"\u6587\u4ef6\u4fdd\u5b58\u5931\u8d25",
     }
   };
   let lang = "en";
@@ -101,6 +104,7 @@
   let selectedElements = [], chatPanel = null, hoverBox = null, aiIdCounter = 0;
   let rafPending = false, lastMoveTarget = null, minimized = false, paused = false;
   const selOverlays = new Map(), annotations = new Map(), listeners = [];
+  let domObserver = null;
   let dragState = null, wasJustDragging = false, activePopover = null;
   const selectionHistory = [];
   let screenshotBtn = null, saveBtn = null, pendingScreenshotSave = null, settingsOpen = false, settingsPanel = null;
@@ -128,19 +132,103 @@
     };
     on(window, "scroll", scheduleReposition, true);
     on(window, "resize", scheduleReposition, false);
+    // SPA routes often replace large DOM subtrees without reloading this core.
+    // Keep newly-added page elements addressable for click, marquee and undo.
+    try {
+      domObserver = new MutationObserver(records => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (node && node.nodeType === 1 && !isEditorElement(node)) assignAiIds(node);
+          }
+        }
+      });
+      domObserver.observe(document.documentElement, { childList: true, subtree: true });
+    } catch (_) {}
     applyI18n();
+    // Extension hooks: Pro can destroy/resume this instance after SPA nav or
+    // a second Alt+S without leaving orphan listeners behind.
+    try {
+      window.__SELECTOR_DESTROY__ = destroy;
+      window.__SELECTOR_ON_REACTIVATE__ = function () {
+        try {
+          if (minimized) toggleMinimize();
+          if (paused) togglePaused();
+        } catch (_) {}
+      };
+      // Same-document navigation (SPA/history) must look like a full reload:
+      // keep the panel and synced preferences, discard page-specific UI state.
+      window.__SELECTOR_ON_NAVIGATION__ = function () {
+        try {
+          showHover(null);
+          cancelDrag();
+          closeSettings();
+          if (typeof closeRevPromptResult === "function") closeRevPromptResult();
+          if (typeof clearPendingScreenshotSave === "function") clearPendingScreenshotSave();
+          clearSelection();
+          selectionHistory.length = 0;
+          if (minimized) toggleMinimize();
+          if (paused) togglePaused();
+          assignAiIds(document.body);
+          updateTags();
+        } catch (_) {}
+      };
+      window.__SELECTOR_APPLY_SETTINGS__ = function (next) {
+        if (!next || typeof next !== "object") return;
+        settings = Object.assign({}, DEFAULTS, next);
+        if (settingsPanel) {
+          settingsPanel.querySelectorAll(`.${NS}-setting-row[data-setting-key]`).forEach(row => {
+            const key = row.dataset.settingKey;
+            if (key === "lang") return;
+            const input = row.querySelector('input[type="checkbox"]');
+            if (input) input.checked = !!settings[key];
+          });
+          settingsPanel.querySelectorAll(`.${NS}-setting-row[data-setting-extra]`).forEach(row => {
+            const key = row.dataset.settingExtra;
+            const input = row.querySelector('input[type="checkbox"]');
+            const select = row.querySelector("select");
+            if (input) input.checked = !!settings[key];
+            if (select && settings[key] != null) select.value = settings[key];
+          });
+        }
+        applyI18n();
+      };
+      window.__SELECTOR_APPLY_LANG__ = function (next) {
+        if (next !== "en" && next !== "zh") return;
+        lang = next;
+        applyI18n();
+        refreshSettingsLabels();
+      };
+    } catch (_) {}
   }
 
   // ── Destroy ──────────────────────────────────────────────────
   function destroy() {
     for (const { target, type, fn, capture } of listeners) target.removeEventListener(type, fn, capture);
+    listeners.length = 0;
+    if (domObserver) { try { domObserver.disconnect(); } catch (_) {} domObserver = null; }
     destroyAllOverlays(); removeAnnotationPopover(); closeSettings();
+    try { if (typeof closeRevPromptResult === "function") closeRevPromptResult(); } catch (_) {}
     if (hoverBox) hoverBox.remove();
     if (chatPanel) chatPanel.remove();
+    hoverBox = null;
+    chatPanel = null;
+    try {
+      if (window.__SELECTOR_DESTROY__ === destroy) delete window.__SELECTOR_DESTROY__;
+      delete window.__SELECTOR_ON_REACTIVATE__;
+      delete window.__SELECTOR_ON_NAVIGATION__;
+      delete window.__SELECTOR_APPLY_SETTINGS__;
+      delete window.__SELECTOR_APPLY_LANG__;
+    } catch (_) {}
+    // Tell the Pro host to stop sticky re-open for this tab (X / Alt+S off).
+    if (HOST.onClosed) { try { HOST.onClosed(); } catch (_) {} }
   }
 
   // ── AI-ID ────────────────────────────────────────────────────
   function assignAiIds(root) {
+    if (!root) return;
+    if (root.nodeType === 1 && !isEditorElement(root) && !root.hasAttribute(AI_ID)) {
+      root.setAttribute(AI_ID, `el-${aiIdCounter++}`);
+    }
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
     let node; while ((node = walker.nextNode())) { if (isEditorElement(node)) continue; if (!node.hasAttribute(AI_ID)) node.setAttribute(AI_ID, `el-${aiIdCounter++}`); }
   }

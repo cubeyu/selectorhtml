@@ -65,7 +65,10 @@ function buildEditor() {
   // Parse the exact assembled payload during every build. The deployed files
   // are base64-encoded static assets, but the decoded bookmarklet must remain
   // valid JavaScript.
-  new Function(assembled.join(""));
+  const joined = assembled.join("");
+  new Function(joined);
+  // Flat editor.js for Selector Pro (vendors this file into dist/vendor/core.js).
+  fs.writeFileSync(path.join(distAssets, "editor.js"), joined);
 }
 
 function build() {

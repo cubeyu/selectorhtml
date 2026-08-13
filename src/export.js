@@ -39,6 +39,11 @@
     else if (result === "fallback") showCopyFeedback(t("copiedFallback"));
     else showCopyFeedback(t("copyFailed"), true);
   }
+  function showDownloadError(err) {
+    const detail = err ? `${err.name || "Error"}: ${err.message || String(err)}` : "";
+    if (err) console.warn(`[Selector] ${t("errDownload")}`, err);
+    showCopyFeedback(t("errDownload"), true, detail);
+  }
   async function copyPrompt() {
     const requestToken = ++copyRequestToken;
     // While a result panel is open, Copy copies that panel's text until closed.
@@ -47,17 +52,9 @@
       showClipboardFeedback(result, requestToken);
       return;
     }
-    // ── License gate (HOST_CONTRACT.md §1.2) ──────────────────
-    // Bookmarklet has no HOST.licensing → skipped entirely. The extension may
-    // require an active license before copying; if so, prompt activation.
-    if (HOST.licensing && HOST.licensing.required && !HOST.licensing.active) {
-      HOST.requestActivation && HOST.requestActivation("copy");
-      if (requestToken === copyRequestToken) showCopyFeedback(t("needLicense"), true);
-      return;
-    }
     // ── Alternate copy formats (HOST_CONTRACT.md §1.5) ────────
     // Bookmarklet settings never carry copyFormat → fmt is undefined → skipped.
-    // The extension (Pro) can produce Markdown / JSON / component code.
+    // The extension can provide an alternate local serializer.
     const fmt = settings.copyFormat;
     if (fmt && fmt !== "prompt" && HOST.buildCopyPayload) {
       try {
@@ -97,7 +94,13 @@
     if (settings.combined) {
       if (settings.sharingan && text.length > SHARINGAN_CLIPBOARD_CHAR_LIMIT) {
         const filename = sharinganFilename();
-        const realPath = await saveMarkdownFile(text, filename);
+        let realPath;
+        try {
+          realPath = await saveMarkdownFile(text, filename);
+        } catch (err) {
+          showDownloadError(err);
+          return;
+        }
         const promptText = appendSharinganDownloadReference(buildPromptText(), filename, text.length, realPath);
         if (requestToken === copyRequestToken) await captureScreenshot({ text: promptText, feedbackTarget: "copy", copyRequestToken: requestToken, downloadImage: true });
         return;
@@ -107,7 +110,13 @@
     }
     if (settings.sharingan && text.length > SHARINGAN_CLIPBOARD_CHAR_LIMIT) {
       const filename = sharinganFilename();
-      const realPath = await saveMarkdownFile(text, filename);
+      let realPath;
+      try {
+        realPath = await saveMarkdownFile(text, filename);
+      } catch (err) {
+        showDownloadError(err);
+        return;
+      }
       const fallback = appendSharinganDownloadReference(buildPromptText(), filename, text.length, realPath);
       const result = await writeToClipboard(fallback);
       showClipboardFeedback(result, requestToken, "exported");
@@ -339,14 +348,6 @@
   // selection when there is one, otherwise the page's main readable content
   // (article/main/body). Press ⌘C while the panel is open to copy the Markdown.
   async function copyAsMarkdown(targetElements) {
-    // ── License gate (HOST_CONTRACT.md §1.2) ──────────────────
-    // Bookmarklet has no HOST.licensing → skipped. The extension's image branch
-    // calls the vision model, so ⌘M must honor the same gate as ⌘C / ⌘⇧C.
-    if (HOST.licensing && HOST.licensing.required && !HOST.licensing.active) {
-      HOST.requestActivation && HOST.requestActivation("copy");
-      showCopyFeedback(t("needLicense"), true);
-      return;
-    }
     let els = targetElements && targetElements.length
       ? targetElements.slice()
       : selectedElements.length
@@ -359,8 +360,7 @@
       // so the extension is never WORSE than the bookmarklet on the same page.
       let payload = null;
       if (HOST.buildCopyPayload) {
-        // The host's image branch round-trips a vision model (up to ~60s) —
-        // reuse ⌘I's shimmer loading so the UI never looks dead meanwhile.
+        // Keep the copy button responsive while the host serializer runs.
         setCopyButtonLoading(true);
         try {
           payload = await HOST.buildCopyPayload("markdown", { elements: els, lang, buildPromptText, buildSharinganReport });
@@ -374,48 +374,6 @@
         finishRevPrompt(payload.text, "copyMarkdown", false);
       }
     } catch (_) { /* best-effort */ }
-  }
-
-  // ── ⌘I — image → generation prompt (Pro / extension only) ──
-  // Find an image in the selection (an <img>, or a CSS background-image), hand it
-  // to the vision model via HOST.reversePrompt, drop the prompt on the clipboard
-  // and show it. Bookmarklet has no HOST.reversePrompt → ⌘I is never bound.
-  function imageSourceFromElement(el) {
-    if (!el) return null;
-    // A selection that carries real text is a UI region, not "an image" — let
-    // the caller fall through to the screenshot branch (UI reverse prompt)
-    // instead of reverse-prompting a thumbnail / decorative background found
-    // inside it. Bare <img> still short-circuits below.
-    if (el.tagName !== "IMG") {
-      try {
-        const visText = (el.innerText || "").replace(/\s+/g, " ").trim();
-        if (visText.length >= 120) return null;
-      } catch (_) {}
-    }
-    const img = (el.tagName === "IMG") ? el : (el.querySelector && el.querySelector("img"));
-    if (img && (img.currentSrc || img.src)) {
-      const out = { url: img.currentSrc || img.src };
-      // Same-origin → encode locally (no extra fetch). Cross-origin taints the
-      // canvas (toDataURL throws) → fall back to the URL; background fetches it.
-      try {
-        if (img.complete && img.naturalWidth && img.naturalHeight) {
-          const c = document.createElement("canvas");
-          c.width = img.naturalWidth; c.height = img.naturalHeight;
-          c.getContext("2d").drawImage(img, 0, 0);
-          out.dataUrl = c.toDataURL("image/png");
-        }
-      } catch (_) { /* cross-origin → use url */ }
-      return out;
-    }
-    try {
-      const bg = getComputedStyle(el).backgroundImage || "";
-      const m = bg.match(/url\((?:"|')?(.*?)(?:"|')?\)/);
-      if (m && m[1]) {
-        if (m[1].indexOf("data:") === 0) return { dataUrl: m[1] };
-        return { url: new URL(m[1], location.href).href };
-      }
-    } catch (_) {}
-    return null;
   }
 
   // Lightweight: a displayable thumbnail src for a selected element, or null.
@@ -438,14 +396,14 @@
   // are declared with the other state vars near the top.) ─────────────────────
   function copyBtnEl() { return chatPanel && chatPanel.querySelector(`.${NS}-copy-btn`); }
 
-  // 流光 loading state on the Copy button while the model analyses the image.
+  // Loading state while Markdown is prepared.
   function setCopyButtonLoading(on) {
     const btn = copyBtnEl(); if (!btn) return;
     if (copyTimer) { clearTimeout(copyTimer); copyTimer = null; }
     btn.classList.remove(`${NS}-copy-done`, `${NS}-copy-error`);
     btn.classList.toggle(`${NS}-copy-loading`, !!on);
     btn.disabled = !!on;
-    if (on) btn.textContent = t("revRunning");
+    if (on) btn.textContent = t("mdPreparing");
     else { btn.disabled = selectedElements.length === 0; setCopyButtonIdle(btn); }
   }
 
@@ -464,7 +422,7 @@
     revPanel = document.createElement("div");
     revPanel.className = `${NS}-root ${NS}-revprompt`;
     const head = document.createElement("div"); head.className = `${NS}-revprompt-head`;
-    const title = document.createElement("span"); title.className = `${NS}-revprompt-title`; title.textContent = t(titleKey || "revTitle");
+    const title = document.createElement("span"); title.className = `${NS}-revprompt-title`; title.textContent = t(titleKey || "mdTitle");
     const close = document.createElement("button"); close.className = `${NS}-revprompt-close`; close.type = "button"; close.textContent = "×";
     close.onclick = closeRevPromptResult;
     head.appendChild(title); head.appendChild(close);
@@ -519,28 +477,6 @@
     }
   }
 
-  // Turn a screenshot Blob into a model-friendly data URL: downscale to a sane
-  // max dimension and re-encode as JPEG to keep the request small/fast.
-  function blobToReversePromptDataURL(blob) {
-    return new Promise((resolve, reject) => {
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const MAX = 1600;
-          let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
-          const scale = Math.min(1, MAX / Math.max(w, h || 1));
-          w = Math.max(1, Math.round(w * scale)); h = Math.max(1, Math.round(h * scale));
-          const c = document.createElement("canvas"); c.width = w; c.height = h;
-          c.getContext("2d").drawImage(img, 0, 0, w, h);
-          resolve(c.toDataURL("image/jpeg", 0.85));
-        } catch (e) { reject(e); } finally { URL.revokeObjectURL(url); }
-      };
-      img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
-      img.src = url;
-    });
-  }
-
   // When the streamed/returned result is complete: settle the panel to the full
   // text (guaranteed visible even if the reveal animation is paused — e.g. a
   // backgrounded tab where rAF doesn't fire), then repurpose Copy to the panel
@@ -559,7 +495,7 @@
       }
     }
     pendingGenPrompt = fullText;
-    pendingResultCopyKey = copyLabelKey || "copyGenPrompt";
+    pendingResultCopyKey = copyLabelKey || "copyMarkdown";
     if (shouldCopy !== false) {
       const token = requestToken || ++copyRequestToken;
       const result = await writeToClipboard(fullText);
@@ -569,69 +505,6 @@
     if (btn) {
       btn.disabled = false;
       setCopyButtonIdle(btn);
-    }
-  }
-
-  async function reversePromptForSelection() {
-    if (!HOST.reversePrompt && !HOST.reversePromptStream) return;
-    const requestToken = ++copyRequestToken;
-    // ── License gate (HOST_CONTRACT.md §1.2) ──────────────────
-    // ⌘I always calls the vision model — the most expensive action in the
-    // product — so it must honor the same gate as ⌘C / ⌘⇧C.
-    if (HOST.licensing && HOST.licensing.required && !HOST.licensing.active) {
-      HOST.requestActivation && HOST.requestActivation("copy");
-      showCopyFeedback(t("needLicense"), true);
-      return;
-    }
-    if (selectedElements.length === 0) { showCopyFeedback(t("revNoImage"), true); return; }
-    closeRevPromptResult();
-    setCopyButtonLoading(true);
-    let opened = false, acc = "";
-    try {
-      // Prefer an actual image in the selection; otherwise screenshot the region
-      // (editor UI is hidden during capture, full element by default) and reverse
-      // that — so ⌘I works on any visual selection, not just <img>.
-      let src = null;
-      for (let i = 0; i < selectedElements.length; i++) {
-        const s = imageSourceFromElement(selectedElements[i]);
-        if (s) { src = s; break; }
-      }
-      if (!src) {
-        const blob = await captureScreenshotBlob();
-        // UI mode: the selection is an interface region, not a picture. The
-        // host consumes `elements` (live nodes, MAIN-world only — they never
-        // cross the bridge) into a measured style digest so the model quotes
-        // real colors/fonts/spacing instead of estimating them from pixels.
-        src = {
-          dataUrl: await blobToReversePromptDataURL(blob),
-          kind: "ui",
-          elements: selectedElements.slice(),
-        };
-      }
-      // The prompt language follows the extension's current UI language.
-      const payload = Object.assign({ lang: lang === "zh" ? "zh" : "en" }, src);
-
-      if (HOST.reversePromptStream) {
-        // Streaming: the panel rises on the first token and types out smoothly.
-        await HOST.reversePromptStream(payload, (token) => {
-          acc += token;
-          if (!opened) { opened = true; setCopyButtonLoading(false); showRevPromptPanel(); }
-          pushRevToken(token);
-        });
-        if (opened && acc) await finishRevPrompt(acc, undefined, undefined, requestToken);
-        else { setCopyButtonLoading(false); if (requestToken === copyRequestToken) showCopyFeedback(t("revFailed"), true); }
-      } else {
-        const res = await HOST.reversePrompt(payload);
-        setCopyButtonLoading(false);
-        if (res && res.prompt) { showRevPromptPanel(); pushRevToken(res.prompt); await finishRevPrompt(res.prompt, undefined, undefined, requestToken); }
-        else if (requestToken === copyRequestToken) showCopyFeedback(t("revFailed"), true);
-      }
-    } catch (err) {
-      setCopyButtonLoading(false);
-      // Keep a partial stream if we got one; otherwise surface the failure.
-      if (opened && acc) await finishRevPrompt(acc, undefined, undefined, requestToken);
-      else if (requestToken === copyRequestToken) showCopyFeedback(t("revFailed"), true);
-      console.warn("[Selector] reversePrompt", err);
     }
   }
 
@@ -659,13 +532,6 @@
 
   async function captureScreenshot(options) {
     if (selectedElements.length === 0) return;
-    // ── License gate (HOST_CONTRACT.md §1.2) ──────────────────
-    // Bookmarklet has no HOST.licensing → skipped. Extension may gate capture.
-    if (HOST.licensing && HOST.licensing.required && !HOST.licensing.active) {
-      HOST.requestActivation && HOST.requestActivation("copy");
-      showCopyFeedback(t("needLicense"), true);
-      return;
-    }
     const opts = options || {};
     const feedbackTarget = opts.feedbackTarget || "screenshot";
     const requestToken = feedbackTarget === "copy" ? (opts.copyRequestToken || ++copyRequestToken) : null;
@@ -678,8 +544,8 @@
     const showSuccess = (savedImage) => {
       if (feedbackTarget === "copy") {
         if (requestToken !== copyRequestToken) return;
-        showCopyFeedback(opts.downloadImage && savedImage ? t("copiedSaved") : t("copied"));
-      } else showScreenshotFeedback(t("screenshotCopied"));
+        showCopyFeedback(savedImage ? t("copiedSaved") : t("copied"));
+      } else showScreenshotFeedback(t(savedImage ? "screenshotCopiedSaved" : "screenshotCopied"));
     };
     // getDisplayMedia is only a requirement on the bookmarklet path; the
     // extension host captures via captureVisibleTab and must not be blocked
@@ -690,7 +556,7 @@
       return;
     }
 
-    const imageFilename = opts.downloadImage ? screenshotFilename() : "";
+    const imageFilename = (opts.downloadImage || HOST.autoSaveScreenshots) ? screenshotFilename() : "";
     let imageBlob;
     try {
       imageBlob = await captureScreenshotBlob();
@@ -709,7 +575,7 @@
         savedFilename = saveResult.filename || imageFilename;
         savedPath = saveResult.path || "";
       } catch (err) {
-        showError(classifyScreenshotError(err, "capture"), err);
+        showError("download", err);
         return;
       }
     }
@@ -718,23 +584,19 @@
     const textWithImagePath = imageFilename ? appendScreenshotSaveReference(text, savedFilename, imageSaved, savedPath) : text;
 
     try {
-      if (imageFilename && textWithImagePath) {
-        await navigator.clipboard.writeText(textWithImagePath);
-      } else {
-        if (!window.ClipboardItem) {
-          showError("unsupported");
-          return;
-        }
-        let itemData = { "image/png": imageBlob };
-        if (textWithImagePath) {
-          itemData = {
-            "text/html": screenshotHtmlBlob(textWithImagePath, imageBlob),
-            "text/plain": new Blob([textWithImagePath], { type: "text/plain" }),
-            "image/png": imageBlob,
-          };
-        }
-        await navigator.clipboard.write([new ClipboardItem(itemData)]);
+      if (!window.ClipboardItem) {
+        showError("unsupported");
+        return;
       }
+      let itemData = { "image/png": imageBlob };
+      if (textWithImagePath) {
+        itemData = {
+          "text/html": screenshotHtmlBlob(textWithImagePath, imageBlob),
+          "text/plain": new Blob([textWithImagePath], { type: "text/plain" }),
+          "image/png": imageBlob,
+        };
+      }
+      await navigator.clipboard.write([new ClipboardItem(itemData)]);
       showSuccess(imageSaved);
     } catch (err) {
       showError("clipboard", err);
@@ -753,7 +615,11 @@
           const name = path ? (path.split(/[\\/]/).pop() || filename) : filename;
           return { saved: true, filename: name, path };
         }
-      } catch (err) { console.warn("[Selector] host download failed, falling back", err); }
+        if (HOST.autoSaveScreenshots) throw new Error("Screenshot auto-save returned no result");
+      } catch (err) {
+        console.warn("[Selector] host download failed", err);
+        if (HOST.autoSaveScreenshots) throw err;
+      }
     }
     try {
       const result = await writeScreenshotWithPicker(blob, filename);
@@ -792,11 +658,9 @@
   // bookmarklet → anchor download (no path). Returns the absolute path or "".
   async function saveMarkdownFile(text, filename) {
     if (HOST.downloadFile) {
-      try {
-        const res = await HOST.downloadFile(filename, new Blob([text], { type: "text/markdown" }), "text/markdown");
-        if (res && res.path) return res.path;
-      } catch (_) { /* fall through */ }
-      return "";
+      const res = await HOST.downloadFile(filename, new Blob([text], { type: "text/markdown" }), "text/markdown");
+      if (res && res.path) return res.path;
+      throw new Error("Markdown save completed without a real path");
     }
     downloadMarkdown(text, filename);
     return "";
@@ -879,6 +743,7 @@
       cancelled: "errCancelled",
       permission: "errPermission",
       clipboard: "errClipboard",
+      download: "errDownload",
       empty: "errEmpty",
       capture: "errCapture",
     }[code] || "errCapture";

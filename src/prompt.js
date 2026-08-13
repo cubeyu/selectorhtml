@@ -12,9 +12,12 @@
       lines.push(`${i + 1}. ${ctx.title} <${ctx.tag}>`);
       if (ctx.selector) lines.push(`   selector: ${ctx.selector}`);
       if (ctx.locator) lines.push(`   locator: ${ctx.locator}`);
+      const testLocators = hostTestLocators(el);
+      if (testLocators) lines.push(`   test: ${testLocators[0]}`);
       if (ctx.inside) lines.push(`   inside: ${ctx.inside}`);
       if (ctx.source) lines.push(`   source: ${ctx.source}`);
       if (ctx.react) lines.push(`   react: ${ctx.react}`);
+      if (ctx.vue) lines.push(`   vue: ${ctx.vue}`);
       if (ctx.text) lines.push(`   text: "${ctx.text}"`);
       Object.entries(ctx.dataAttrs).forEach(([k, v]) => lines.push(`   ${k}: ${v}`));
       if (ctx.visual) lines.push(`   visual: ${ctx.visual}`);
