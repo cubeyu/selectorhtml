@@ -1,4 +1,21 @@
   // ── Resolve target ───────────────────────────────────────────
+  // Browsers do not dispatch pointer/click events to disabled form controls:
+  // hovering or clicking a <button disabled> targets an ANCESTOR instead.
+  // Hit-testing (elementsFromPoint) is unaffected and still reports the real
+  // topmost element, so walk the stack and hand back the disabled control
+  // the browser swallowed. Elements with pointer-events:none never appear in
+  // the stack, so this cannot pick up non-interactive layers.
+  function resolveEventTarget(e) {
+    if (document.elementsFromPoint && e.clientX != null && e.clientY != null) {
+      const stack = document.elementsFromPoint(e.clientX, e.clientY);
+      for (const el of stack) {
+        if (el === e.target) break; // reached the real target — nothing was retargeted
+        if (el && el.nodeType === 1 && !isEditorElement(el) && el.disabled === true) return el;
+      }
+    }
+    return e.target;
+  }
+
   function resolveTarget(el) {
     const action = closestActionElement(el);
     if (action && !isEditorElement(action) && isVisible(action)) return action;
@@ -90,7 +107,7 @@
         return;
       }
     }
-    lastMoveTarget = resolveNestedTargetFromSelection(e) || resolveTarget(e.target);
+    lastMoveTarget = resolveNestedTargetFromSelection(e) || resolveTarget(resolveEventTarget(e));
     if (!rafPending) { rafPending = true; requestAnimationFrame(() => { showHover(lastMoveTarget); rafPending = false; }); }
   }
   function handleMouseDown(e) {
@@ -116,7 +133,7 @@
     if (isEditorElement(e.target) || minimized || paused || wasJustDragging) return;
     e.preventDefault(); e.stopPropagation(); removeAnnotationPopover();
     const sel = window.getSelection(); if (sel) sel.removeAllRanges();
-    pushHistory(); const el = resolveNestedTargetFromSelection(e) || resolveTarget(e.target);
+    pushHistory(); const el = resolveNestedTargetFromSelection(e) || resolveTarget(resolveEventTarget(e));
     if (e.shiftKey) toggleElement(el); else { clearUnannotatedSelections(); addSelection(el); }
     updateTags();
   }
