@@ -85,8 +85,9 @@
     position:relative;z-index:1;display:inline-flex;align-items:center;gap:4px;
     padding:6px 9px;border:1px solid rgba(255,255,255,.12);border-radius:6px;
     background:rgba(255,255,255,.045);font-size:11px;font-weight:650;color:#e9e9e9;text-decoration:none;
-    cursor:default;
+    cursor:pointer;transition:border-color .18s ease,background .18s ease;
   }
+  .pro-link:hover{border-color:rgba(255,255,255,.24);background:rgba(255,255,255,.08)}
   @keyframes pro-shimmer{to{background-position:-220% 0}}
   @media (max-width:760px){.pro{position:static;width:auto;margin-top:44px;max-width:none}}
   @media (prefers-reduced-motion: reduce){.pro-tag{animation:none}}
@@ -111,7 +112,7 @@ document.addEventListener("DOMContentLoaded", function () {
       proTag: "pro",
       proTitle: "Selector Pro",
       proDesc: "<ul><li><strong>Always ready:</strong> customizable shortcut, toolbar and right-click activation; keeps working after page changes.</li><li><strong>Complete capture:</strong> full-element screenshots without the browser share picker, copied and saved automatically.</li><li><strong>Reliable output:</strong> cross-origin images, CSS and fonts, synced settings and real saved-file paths.</li></ul>",
-      proLink: "Coming soon",
+      proLink: "Compare with Selector Pro →",
     },
     zh: {
       title: "Selector — 可视化元素选择器",
@@ -127,7 +128,7 @@ document.addEventListener("DOMContentLoaded", function () {
       proTag: "pro",
       proTitle: "Selector Pro",
       proDesc: "<ul><li><strong>随时可用：</strong>自定义快捷键、工具栏和右键唤起，页面跳转后继续工作。</li><li><strong>完整截图：</strong>不弹系统共享框，直接截完整元素，并自动复制与保存。</li><li><strong>可靠输出：</strong>补全跨域图片、CSS、字体，同步设置，并返回真实文件路径。</li></ul>",
-      proLink: "即将上线",
+      proLink: "对比 Selector Pro →",
     },
   };
   var lang = loadLang();
@@ -279,7 +280,7 @@ document.addEventListener("DOMContentLoaded", function () {
         <li><strong>Reliable output:</strong> cross-origin assets, synced settings and real file paths.</li>
       </ul>
     </div>
-    <span class="pro-link" data-i18n="proLink">Coming soon</span>
+    <a class="pro-link" href="https://selector-pro.org/#compare" target="_blank" rel="noopener" data-i18n="proLink">Compare with Selector Pro &rarr;</a>
   </div>
   <div class="footer">
     <a href="https://github.com/oil-oil/selector" target="_blank">GitHub</a> · <span data-version></span>

@@ -28,7 +28,7 @@
   const AI_ID = "data-ai-id";
   const VERSION = "0.4.1";
   // Cross-link targets for the settings-panel promo (bookmarklet ⇄ Pro extension).
-  const EXT_LANDING_URL = "https://oil-oil.github.io/selector-extension/";
+  const EXT_LANDING_URL = "https://selector-pro.org/";
   const BOOKMARKLET_URL = "https://oil-oil.github.io/selector/";
 
   // ── i18n ─────────────────────────────────────────────────────
