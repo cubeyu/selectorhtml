@@ -27,14 +27,19 @@
   // Small stroke icons for the other rows so each setting reads at a glance.
   const ICON_BOOKMARK = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`;
 
+  function settingTextKey(key, suffix = "") {
+    if (key === "combined" && HOST.screenshotClipboardContext === true) return `optCombinedPro${suffix}`;
+    return "opt" + key[0].toUpperCase() + key.slice(1) + suffix;
+  }
+
   function mkToggle(key) {
     const row = document.createElement("div"); row.className = `${NS}-setting-row`;
     row.dataset.settingKey = key;
     const info = document.createElement("div"); info.className = `${NS}-setting-info`;
     const labelLine = document.createElement("span"); labelLine.className = `${NS}-setting-label-line`;
-    const lbl = document.createElement("span"); lbl.className = `${NS}-setting-label`; lbl.textContent = t("opt" + key[0].toUpperCase() + key.slice(1));
+    const lbl = document.createElement("span"); lbl.className = `${NS}-setting-label`; lbl.textContent = t(settingTextKey(key));
     labelLine.appendChild(lbl);
-    const desc = document.createElement("span"); desc.className = `${NS}-setting-desc`; desc.textContent = t("opt" + key[0].toUpperCase() + key.slice(1) + "Desc");
+    const desc = document.createElement("span"); desc.className = `${NS}-setting-desc`; desc.textContent = t(settingTextKey(key, "Desc"));
     info.appendChild(labelLine); info.appendChild(desc);
     const toggle = document.createElement("label"); toggle.className = `${NS}-toggle`;
     const input = document.createElement("input"); input.type = "checkbox"; input.checked = !!settings[key];
@@ -49,6 +54,95 @@
       row.classList.add(`${NS}-setting-flash`);
     };
     row.appendChild(info); row.appendChild(toggle); return row;
+  }
+
+  function formatPageShortcut(value) {
+    const raw = normalizeShortcutBinding(value);
+    if (!raw) return t("shortcutCleared");
+    const isMac = /Mac|iPhone|iPad|iPod/i.test((navigator && navigator.platform) || "");
+    const parts = raw.split("+");
+    if (isMac) {
+      const symbols = { Mod:"\u2318", Alt:"\u2325", Shift:"\u21e7" };
+      return parts.map(part => symbols[part] || part).join("");
+    }
+    return parts.map(part => part === "Mod" ? "Ctrl" : part).join("+");
+  }
+  function isMacPlatform() {
+    return /Mac|iPhone|iPad|iPod/i.test((navigator && navigator.platform) || "");
+  }
+
+  function shortcutActionLabel(key) {
+    return key === "shortcutCopyContext" ? t("shortcutCopyContext")
+      : key === "shortcutScreenshotContext" ? t("shortcutScreenshotContext")
+      : t("shortcutMarkdown");
+  }
+
+  function refreshShortcutRows() {
+    if (!settingsPanel || HOST.pageShortcuts !== true) return;
+    settingsPanel.querySelectorAll(`.${NS}-shortcut-row[data-shortcut-key]`).forEach(row => {
+      const key = row.dataset.shortcutKey;
+      const button = row.querySelector(`.${NS}-shortcut-record`);
+      const label = row.querySelector(`.${NS}-setting-label`);
+      if (label) label.textContent = shortcutActionLabel(key);
+      if (button && !button.dataset.recording) button.textContent = formatPageShortcut(settings[key]);
+      const desc = row.querySelector(`.${NS}-setting-desc`);
+      if (desc && !button.dataset.recording) desc.textContent = t(key + "Desc");
+    });
+  }
+
+  function mkShortcutRow(key) {
+    const row = document.createElement("div");
+    row.className = `${NS}-setting-row ${NS}-shortcut-row`;
+    row.dataset.shortcutKey = key;
+    const info = document.createElement("div"); info.className = `${NS}-setting-info`;
+    const label = document.createElement("span"); label.className = `${NS}-setting-label`; label.textContent = shortcutActionLabel(key);
+    const desc = document.createElement("span"); desc.className = `${NS}-setting-desc`; desc.textContent = t(key + "Desc");
+    info.appendChild(label); info.appendChild(desc);
+    const button = document.createElement("button");
+    button.type = "button"; button.className = `${NS}-shortcut-record ${NS}-settings-shortcut-action`;
+    button.textContent = formatPageShortcut(settings[key]);
+    button.title = t("shortcutRecordHint");
+    button.addEventListener("keydown", event => {
+      event.preventDefault(); event.stopPropagation();
+      if (event.key === "Escape") {
+        delete button.dataset.recording;
+        button.textContent = formatPageShortcut(settings[key]);
+        desc.textContent = t(key + "Desc");
+        return;
+      }
+      if (event.key === "Backspace" || event.key === "Delete") {
+        settings[key] = ""; saveSettings();
+        delete button.dataset.recording;
+        button.textContent = formatPageShortcut("");
+        desc.textContent = t(key + "Desc");
+        updateShortcuts();
+        return;
+      }
+      const next = shortcutFromEvent(event);
+      if (!next) { desc.textContent = t("shortcutInvalid"); return; }
+      const activationConflict = normalizeShortcutBinding(HOST.activationShortcut) === next;
+      const duplicate = activationConflict || PRO_SHORTCUT_KEYS.some(other => other !== key && normalizeShortcutBinding(settings[other]) === next);
+      if (duplicate) { desc.textContent = t("shortcutDuplicate"); return; }
+      settings[key] = next; saveSettings();
+      delete button.dataset.recording;
+      button.textContent = formatPageShortcut(next);
+      desc.textContent = t(key + "Desc");
+      row.classList.remove(`${NS}-setting-flash`); void row.offsetWidth; row.classList.add(`${NS}-setting-flash`);
+      updateShortcuts();
+    });
+    button.addEventListener("focus", () => {
+      button.dataset.recording = "1";
+      button.textContent = t("shortcutRecordHint");
+      desc.textContent = t("shortcutRecordHint");
+    });
+    button.addEventListener("blur", () => {
+      if (button.dataset.recording) {
+        delete button.dataset.recording;
+        button.textContent = formatPageShortcut(settings[key]);
+        desc.textContent = t(key + "Desc");
+      }
+    });
+    row.appendChild(info); row.appendChild(button); return row;
   }
 
   // ── Host UI extra rows (HOST_CONTRACT.md §1.6) ──────────────
@@ -199,6 +293,10 @@
     settingsPanel.appendChild(langWrap);
     settingsPanel.appendChild(mkToggle("combined"));
     settingsPanel.appendChild(mkToggle("sharingan"));
+    if (HOST.pageShortcuts === true) {
+      settingsPanel.appendChild(mkSettingGroup("shortcuts"));
+      PRO_SHORTCUT_KEYS.forEach(key => settingsPanel.appendChild(mkShortcutRow(key)));
+    }
     // ── Host UI extras (HOST_CONTRACT.md §1.6) ────────────────
     // Bookmarklet has no HOST.uiExtras → loop is empty → panel is pixel-identical.
     // Extension appends extra toggle/select rows here, reusing existing styles.
@@ -225,8 +323,8 @@
     settingsPanel.querySelectorAll(`.${NS}-setting-row[data-setting-key]`).forEach(row => {
       const k = row.dataset.settingKey;
       if (k === "lang") return;
-      const lbl = row.querySelector(`.${NS}-setting-label`); if (lbl) lbl.textContent = t("opt" + k[0].toUpperCase() + k.slice(1));
-      const desc = row.querySelector(`.${NS}-setting-desc`); if (desc) desc.textContent = t("opt" + k[0].toUpperCase() + k.slice(1) + "Desc");
+      const lbl = row.querySelector(`.${NS}-setting-label`); if (lbl) lbl.textContent = t(settingTextKey(k));
+      const desc = row.querySelector(`.${NS}-setting-desc`); if (desc) desc.textContent = t(settingTextKey(k, "Desc"));
     });
     const stTitle = settingsPanel.querySelector(`.${NS}-settings-title`); if (stTitle) stTitle.textContent = t("settings");
     const langRow = settingsPanel.querySelector(`.${NS}-setting-row[data-setting-key="lang"]`);
@@ -239,6 +337,7 @@
       const cc = promo.querySelector(`.${NS}-settings-promo-cta`); if (cc) cc.textContent = t(isExt ? "freePromoCta" : "proPromoCta");
     }
     refreshProSettingsSummary();
+    refreshShortcutRows();
   }
 
   // Subtle cross-link shown at the bottom of the settings panel.
@@ -308,20 +407,23 @@
 
   function updateShortcuts() {
     const sc = chatPanel.querySelector(`.${NS}-shortcuts`); if (!sc) return;
+    const copyShortcut = HOST.pageShortcuts === true ? formatPageShortcut(settings.shortcutCopyContext) : (isMacPlatform() ? "\u2318C" : "Ctrl+C");
+    const screenshotShortcut = HOST.pageShortcuts === true ? formatPageShortcut(settings.shortcutScreenshotContext) : (isMacPlatform() ? "\u2318\u21e7C" : "Ctrl+Shift+C");
+    const markdownShortcut = HOST.pageShortcuts === true ? formatPageShortcut(settings.shortcutMarkdown) : (isMacPlatform() ? "\u2318M" : "Ctrl+M");
     const items = [
       `<span><kbd>Click</kbd> ${t("skSelect")}</span>`,
       `<span><kbd>Shift</kbd> ${t("skMulti")}</span>`,
       `<span><kbd>\u2190\u2191\u2192\u2193</kbd> ${t("skNavigate")}</span>`,
-      `<span><kbd>\u2318C</kbd> ${t("skCopy")}</span>`,
-      `<span><kbd>\u2318\u21e7C</kbd> ${t("skScreenshot")}</span>`,
+      `<span><kbd>${copyShortcut}</kbd> ${t("skCopy")}</span>`,
+      `<span><kbd>${screenshotShortcut}</kbd> ${t("skScreenshot")}</span>`,
     ];
     // \u2318M copies rendered content as Markdown in both bookmarklet and Pro.
-    items.push(`<span><kbd>\u2318M</kbd> ${t("skMarkdown")}</span>`);
-    items.push(`<span><kbd>\u2318Z</kbd> ${t("skUndo")}</span>`);
+    items.push(`<span><kbd>${markdownShortcut}</kbd> ${t("skMarkdown")}</span>`);
+    items.push(`<span><kbd>${isMacPlatform() ? "\u2318Z" : "Ctrl+Z"}</kbd> ${t("skUndo")}</span>`);
     items.push(`<span><kbd>Esc</kbd> ${selectedElements.length ? t("skClear") : t("skPause")}</span>`);
     // Display Chrome's current assignment, including user customization.
     if (HOST.isExtension && HOST.activationShortcut) {
-      const shortcut = String(HOST.activationShortcut).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[ch]);
+      const shortcut = formatActivationShortcut(HOST.activationShortcut).replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[ch]);
       items.push(`<span><kbd>${shortcut}</kbd> ${t("skActivate")}</span>`);
     }
     sc.innerHTML = items.join("");

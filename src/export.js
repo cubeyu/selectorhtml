@@ -580,7 +580,12 @@
       }
     }
 
-    const text = Object.prototype.hasOwnProperty.call(opts, "text") ? opts.text : (settings.combined ? buildPromptText() : "");
+    // Pro screenshot actions always carry the regular prompt/context text,
+    // independently of the main Copy button's combined toggle. This keeps a
+    // direct screenshot useful to an AI while preserving bookmarklet behavior.
+    const text = Object.prototype.hasOwnProperty.call(opts, "text")
+      ? opts.text
+      : (HOST.screenshotClipboardContext === true ? buildPromptText() : (settings.combined ? buildPromptText() : ""));
     const textWithImagePath = imageFilename ? appendScreenshotSaveReference(text, savedFilename, imageSaved, savedPath) : text;
 
     try {

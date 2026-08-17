@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   // Already running: the Pro extension may re-inject after SPA navigations or a
-  // second Alt+S. Prefer a soft resume (unpause / un-minimize) over a no-op.
+  // second activation shortcut. Prefer a soft resume over a no-op.
   if (document.querySelector(".ai-editor-root")) {
     try {
       if (typeof window.__SELECTOR_ON_REACTIVATE__ === "function") {
@@ -26,7 +26,7 @@
   // logic as the fallback. Never make a path Host-only.
   const HOST = (typeof window !== "undefined" && window.__SELECTOR_HOST__) || {};
   const AI_ID = "data-ai-id";
-  const VERSION = "0.4.0";
+  const VERSION = "0.4.1";
   // Cross-link targets for the settings-panel promo (bookmarklet ⇄ Pro extension).
   const EXT_LANDING_URL = "https://oil-oil.github.io/selector-extension/";
   const BOOKMARKLET_URL = "https://oil-oil.github.io/selector/";
@@ -39,13 +39,18 @@
       settings:"Settings", lang:"Language", addInstruction:"Add instruction",
       instrPlaceholder:"Instruction for this element\u2026", clear:"Clear", done:"Done",
       clearAll:"Clear all", minimize:"Minimize", restore:"Restore", close:"Close",
-      groupGeneral:"General",
+      groupGeneral:"General", groupShortcuts:"Page shortcuts",
       skSelect:"Select", skMulti:"Multi", skNavigate:"Navigate", skPause:"Pause",
       skCopy:"Copy", skScreenshot:"Screenshot", skMarkdown:"Markdown", skActivate:"Toggle", skUndo:"Undo", skClear:"Clear",
       optCombined:"Screenshot + text combined", optCombinedDesc:"Copy screenshot and prompt text together",
+      optCombinedPro:"Copy button includes screenshot", optCombinedProDesc:"The main copy action also captures the selected element",
       optSharingan:"Sharingan mode", optSharinganDesc:"Copy a complete DOM, CSS, font and animation report",
       savePng:"Save PNG",
       proShortcutTitle:"Activation shortcut", proShortcutHint:"Opens Chrome shortcut settings",
+      shortcutCopyContext:"Copy context", shortcutCopyContextDesc:"Copy the selected elements and page context",
+      shortcutScreenshotContext:"Screenshot + context", shortcutScreenshotContextDesc:"Copy a PNG screenshot with the selected context",
+      shortcutMarkdown:"Markdown", shortcutMarkdownDesc:"Copy the selected content as Markdown",
+      shortcutRecordHint:"Press a key combination with Mod or Alt. Esc cancels; Backspace/Delete clears.", shortcutDuplicate:"That shortcut is already assigned.", shortcutInvalid:"Use Mod or Alt plus one key.", shortcutCleared:"Not set",
       shortcutUnassigned:"Not set", shortcutSet:"Set", shortcutChange:"Change",
       proPromoTitle:"Selector Pro", proPromoDesc:"Always one shortcut away. Stays active across tabs, captures complete elements without dialogs, and syncs your settings.", proPromoCta:"Get the extension →",
       freePromoTitle:"Free bookmarklet", freePromoDesc:"No install — drag a bookmark, use on any page.", freePromoCta:"Open on GitHub →",
@@ -60,13 +65,18 @@
       settings:"\u8bbe\u7f6e", lang:"\u8bed\u8a00", addInstruction:"\u6dfb\u52a0\u6307\u4ee4",
       instrPlaceholder:"\u6b64\u5143\u7d20\u7684\u4fee\u6539\u6307\u4ee4\u2026", clear:"\u6e05\u9664", done:"\u5b8c\u6210",
       clearAll:"\u6e05\u9664\u5168\u90e8", minimize:"\u6700\u5c0f\u5316", restore:"\u6062\u590d", close:"\u5173\u95ed",
-      groupGeneral:"\u901a\u7528",
+      groupGeneral:"\u901a\u7528", groupShortcuts:"\u9875\u5185\u5feb\u6377\u952e",
       skSelect:"\u9009\u62e9", skMulti:"\u591a\u9009", skNavigate:"\u5bfc\u822a", skPause:"\u6682\u505c",
       skCopy:"\u590d\u5236", skScreenshot:"\u622a\u56fe", skMarkdown:"Markdown", skActivate:"\u5f00/\u5173", skUndo:"\u64a4\u9500", skClear:"\u6e05\u9664",
       optCombined:"\u622a\u56fe + \u6587\u672c\u5408\u5e76", optCombinedDesc:"\u540c\u65f6\u590d\u5236\u622a\u56fe\u548c\u63d0\u793a\u8bcd\u6587\u672c",
+      optCombinedPro:"\u590d\u5236\u6309\u94ae\u540c\u65f6\u622a\u56fe", optCombinedProDesc:"\u70b9\u51fb\u4e3b\u590d\u5236\u6309\u94ae\u65f6\uff0c\u540c\u65f6\u622a\u53d6\u5df2\u9009\u5143\u7d20",
       optSharingan:"\u5199\u8f6e\u773c\u6a21\u5f0f", optSharinganDesc:"\u590d\u5236\u5b8c\u6574 DOM\u3001\u6837\u5f0f\u3001\u5b57\u4f53\u4e0e\u52a8\u753b\u62a5\u544a",
       savePng:"\u4fdd\u5b58 PNG",
       proShortcutTitle:"\u542f\u52a8\u5feb\u6377\u952e", proShortcutHint:"\u6253\u5f00 Chrome \u5feb\u6377\u952e\u8bbe\u7f6e",
+      shortcutCopyContext:"\u590d\u5236\u4e0a\u4e0b\u6587", shortcutCopyContextDesc:"\u590d\u5236\u5df2\u9009\u5143\u7d20\u548c\u9875\u9762\u4e0a\u4e0b\u6587",
+      shortcutScreenshotContext:"\u622a\u56fe + \u4e0a\u4e0b\u6587", shortcutScreenshotContextDesc:"\u590d\u5236\u5e26\u5df2\u9009\u4e0a\u4e0b\u6587\u7684 PNG \u622a\u56fe",
+      shortcutMarkdown:"Markdown", shortcutMarkdownDesc:"\u5c06\u5df2\u9009\u5185\u5bb9\u590d\u5236\u4e3a Markdown",
+      shortcutRecordHint:"\u8bf7\u6309\u5305\u542b Mod \u6216 Alt \u7684\u5feb\u6377\u952e\u3002Esc \u53d6\u6d88\uff1bBackspace/Delete \u6e05\u9664\u3002", shortcutDuplicate:"\u8be5\u5feb\u6377\u952e\u5df2\u5206\u914d\u3002", shortcutInvalid:"\u8bf7\u4f7f\u7528 Mod \u6216 Alt + \u4e00\u4e2a\u6309\u952e\u3002", shortcutCleared:"\u672a\u8bbe\u7f6e",
       shortcutUnassigned:"\u672a\u8bbe\u7f6e", shortcutSet:"\u8bbe\u7f6e", shortcutChange:"\u4fee\u6539",
       proPromoTitle:"Selector Pro", proPromoDesc:"\u968f\u65f6\u4e00\u952e\u5524\u8d77\u3002\u5207\u6362\u6807\u7b7e\u4ecd\u4fdd\u6301\u5f00\u542f\u3001\u96f6\u5f39\u7a97\u5b8c\u6574\u622a\u56fe\u3001\u8bbe\u7f6e\u81ea\u52a8\u540c\u6b65\u3002", proPromoCta:"\u83b7\u53d6\u6d4f\u89c8\u5668\u6269\u5c55 \u2192",
       freePromoTitle:"\u514d\u8d39\u4e66\u7b7e\u7248", freePromoDesc:"\u514d\u5b89\u88c5 \u2014\u2014 \u62d6\u4e00\u4e2a\u4e66\u7b7e\uff0c\u4efb\u610f\u9875\u9762\u53ef\u7528\u3002", freePromoCta:"\u5728 GitHub \u6253\u5f00 \u2192",
@@ -84,6 +94,14 @@
 
   // ── Settings ─────────────────────────────────────────────────
   const DEFAULTS = { combined:false, sharingan:false };
+  // Pro-only page shortcuts. The free bookmarklet never reads these keys, so
+  // its legacy Cmd/Ctrl bindings remain unchanged.
+  const PRO_SHORTCUT_DEFAULTS = {
+    shortcutCopyContext: "Mod+C",
+    shortcutScreenshotContext: "Mod+Shift+C",
+    shortcutMarkdown: "Mod+M",
+  };
+  const PRO_SHORTCUT_KEYS = Object.keys(PRO_SHORTCUT_DEFAULTS);
   // Reports up to this size go straight to the clipboard. Past this — and only
   // past it — we fall back to downloading the full report as a .md file so we
   // don't choke the OS clipboard. The previous floor (30_000) silently
@@ -94,6 +112,55 @@
   // Host may pre-seed the settings object (read once at init); else read
   // localStorage. Either source is merged over DEFAULTS so the shape is stable.
   try { var s = HOST.initialSettings || JSON.parse(localStorage.getItem(NS + "-settings")); if (s) settings = Object.assign({}, DEFAULTS, s); } catch(_) {}
+  if (HOST.pageShortcuts === true) settings = Object.assign({}, PRO_SHORTCUT_DEFAULTS, settings);
+  const HOST_SETTINGS_BASE = HOST.isExtension === true
+    ? Object.assign({}, HOST.pageShortcuts === true ? PRO_SHORTCUT_DEFAULTS : {}, HOST.initialSettings || {})
+    : {};
+
+  // Portable shortcut helpers are intentionally pure so both the recorder and
+  // the MAIN-world keydown path use exactly the same representation.
+  function normalizeShortcutKey(key) {
+    const raw = String(key || "").trim();
+    if (!raw) return "";
+    const aliases = { " ": "Space", Spacebar: "Space", Esc: "Escape", Del: "Delete" };
+    if (aliases[raw]) return aliases[raw];
+    if (/^Key[A-Z]$/i.test(raw)) return raw.slice(-1).toUpperCase();
+    if (/^Digit[0-9]$/.test(raw)) return raw.slice(-1);
+    if (/^Numpad[0-9]$/.test(raw)) return raw.slice(-1);
+    if (/^[a-z]$/i.test(raw)) return raw.toUpperCase();
+    if (/^[0-9]$/.test(raw) || /^F(?:[1-9]|1[0-2])$/i.test(raw)) return raw.toUpperCase();
+    if (/^(Space|Enter|Tab|Escape|Backspace|Delete|Insert|Home|End|PageUp|PageDown|Arrow(?:Up|Down|Left|Right)|[.,/;'\\[\\]\\-=`])$/i.test(raw)) return raw.length === 1 ? raw : raw[0].toUpperCase() + raw.slice(1);
+    return "";
+  }
+  function normalizeShortcutBinding(value) {
+    if (!value) return "";
+    const parts = String(value).split("+").map(part => part.trim()).filter(Boolean);
+    let mod = false, alt = false, shift = false, key = "";
+    for (const part of parts) {
+      if (/^(?:Mod|Command|Cmd|Ctrl|Control)$/i.test(part)) mod = true;
+      else if (/^(?:Alt|Option)$/i.test(part)) alt = true;
+      else if (/^Shift$/i.test(part)) shift = true;
+      else if (!key) key = normalizeShortcutKey(part);
+      else return "";
+    }
+    if (!key || (!mod && !alt)) return "";
+    return (mod ? "Mod+" : "") + (alt ? "Alt+" : "") + (shift ? "Shift+" : "") + key;
+  }
+  function shortcutFromEvent(event) {
+    if (!event || event.isComposing) return "";
+    // `event.code` keeps letter/number shortcuts layout-independent, while
+    // punctuation codes such as `BracketLeft` need the printable `event.key`.
+    const key = normalizeShortcutKey(event.code) || normalizeShortcutKey(event.key);
+    if (!key || (!event.metaKey && !event.ctrlKey && !event.altKey)) return "";
+    return normalizeShortcutBinding(
+      (event.metaKey || event.ctrlKey ? "Mod+" : "") +
+      (event.altKey ? "Alt+" : "") +
+      (event.shiftKey ? "Shift+" : "") + key,
+    );
+  }
+  function shortcutMatches(event, binding) {
+    return !!binding && shortcutFromEvent(event) === normalizeShortcutBinding(binding);
+  }
   function saveSettings() {
     // Host persists settings (fire-and-forget); bookmarklet uses localStorage.
     if (HOST.setSettings) { HOST.setSettings(settings); return; }
@@ -146,7 +213,7 @@
     } catch (_) {}
     applyI18n();
     // Extension hooks: Pro can destroy/resume this instance after SPA nav or
-    // a second Alt+S without leaving orphan listeners behind.
+    // a second activation shortcut without leaving orphan listeners behind.
     try {
       window.__SELECTOR_DESTROY__ = destroy;
       window.__SELECTOR_ON_REACTIVATE__ = function () {
@@ -174,7 +241,7 @@
       };
       window.__SELECTOR_APPLY_SETTINGS__ = function (next) {
         if (!next || typeof next !== "object") return;
-        settings = Object.assign({}, DEFAULTS, next);
+        settings = Object.assign({}, DEFAULTS, HOST_SETTINGS_BASE, next);
         if (settingsPanel) {
           settingsPanel.querySelectorAll(`.${NS}-setting-row[data-setting-key]`).forEach(row => {
             const key = row.dataset.settingKey;
@@ -189,6 +256,7 @@
             if (input) input.checked = !!settings[key];
             if (select && settings[key] != null) select.value = settings[key];
           });
+          if (typeof refreshShortcutRows === "function") refreshShortcutRows();
         }
         applyI18n();
       };
@@ -219,7 +287,7 @@
       delete window.__SELECTOR_APPLY_SETTINGS__;
       delete window.__SELECTOR_APPLY_LANG__;
     } catch (_) {}
-    // Tell the Pro host to stop sticky re-open for this tab (X / Alt+S off).
+    // Tell the Pro host to stop sticky re-open for this tab (X / shortcut off).
     if (HOST.onClosed) { try { HOST.onClosed(); } catch (_) {} }
   }
 

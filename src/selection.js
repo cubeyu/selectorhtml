@@ -207,6 +207,9 @@
 
   function handleKeyDown(e) {
     if (isEditorElement(e.target)&&(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")) return;
+    // The document listener runs in capture phase. Let the settings recorder
+    // consume its keystroke before any configured page action can fire.
+    if (e.target && e.target.closest && e.target.closest(`.${NS}-shortcut-record`)) return;
     const mod=e.metaKey||e.ctrlKey;
     if(e.key==="Escape"){
       e.preventDefault();
@@ -217,12 +220,20 @@
       else togglePaused();
       return;
     }
+    // Pro keeps the three page actions in MAIN world so they can be changed
+    // without Chrome's global command registry. The free bookmarklet does not
+    // opt into HOST.pageShortcuts and therefore keeps its historical keys.
+    if (HOST.pageShortcuts === true) {
+      if (shortcutMatches(e, settings.shortcutCopyContext) && (selectedElements.length > 0 || pendingGenPrompt)) { e.preventDefault(); copyPrompt(); return; }
+      if (shortcutMatches(e, settings.shortcutScreenshotContext) && selectedElements.length > 0) { e.preventDefault(); captureScreenshot({ text: buildPromptText() }); return; }
+      if (shortcutMatches(e, settings.shortcutMarkdown)) { e.preventDefault(); copyAsMarkdown(); return; }
+    }
     // ⌘C also works with NO selection while a result panel is open (⌘M with
     // no selection falls back to the page body, so there may be nothing
     // selected) — copyPrompt()'s pendingGenPrompt branch handles it.
-    if(mod&&e.key.toLowerCase()==="c"&&!e.shiftKey&&(selectedElements.length>0||pendingGenPrompt)){ e.preventDefault(); copyPrompt(); return; }
-    if(mod&&e.shiftKey&&e.key.toLowerCase()==="c"&&selectedElements.length>0){ e.preventDefault(); captureScreenshot(); return; }
-    if(mod&&!e.shiftKey&&e.key.toLowerCase()==="m"){ e.preventDefault(); copyAsMarkdown(); return; }
+    if(HOST.pageShortcuts !== true && mod&&e.key.toLowerCase()==="c"&&!e.shiftKey&&(selectedElements.length>0||pendingGenPrompt)){ e.preventDefault(); copyPrompt(); return; }
+    if(HOST.pageShortcuts !== true && mod&&e.shiftKey&&e.key.toLowerCase()==="c"&&selectedElements.length>0){ e.preventDefault(); captureScreenshot(); return; }
+    if(HOST.pageShortcuts !== true && mod&&!e.shiftKey&&e.key.toLowerCase()==="m"){ e.preventDefault(); copyAsMarkdown(); return; }
     if(mod&&e.key.toLowerCase()==="z"&&!e.shiftKey){ e.preventDefault(); undo(); return; }
     if(e.key==="ArrowUp"&&selectedElements.length===1){ e.preventDefault(); navigateToParent(); return; }
     if(e.key==="ArrowDown"&&selectedElements.length===1){ e.preventDefault(); navigateToChild(); return; }
